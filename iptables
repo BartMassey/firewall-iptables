@@ -148,6 +148,24 @@ $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
 # Accept the packets we actually want to forward
 #
 
+##########################
+#
+# Report on guest WAP packets that try to get in
+#
+
+$IPTABLES -N badguest
+$IPTABLES -A badguest -m limit --limit 3/minute --limit-burst 3 -j LOG \
+--log-level DEBUG --log-prefix "IPT bad guest packet died: "
+$IPTABLES -A badguest -j DROP
+
+# Special INPUT rules to decide which IP's to allow.
+# Our guest network setup is a bit magic.
+
+$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -d $LAN_IP_RANGE -j badguest
+$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -d $EOP_IP_RANGE -j badguest
+$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -d $WPA_IP_RANGE -j badguest
+$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -j ACCEPT
+
 $IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
 $IPTABLES -A FORWARD -i $WAP_IFACE -j ACCEPT
 $IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
@@ -291,18 +309,6 @@ $IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $LAN_BCAST_ADDRESS -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $BCAST_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $MCAST_RANGE -j ACCEPT
 
-# Special INPUT rules to decide which IP's to allow.
-# Our guest network setup is a bit magic.
-$IPTABLES -N badguest
-# Report on guest WAP packets that try to get in
-$IPTABLES -A badguest -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level DEBUG --log-prefix "IPT bad guest packet died: "
-$IPTABLES -A badguest -j DROP
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $LAN_IP_RANGE -j badguest
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $EOP_IP_RANGE -j badguest
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WPA_IP_RANGE -j badguest
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -j ACCEPT
-
 $IPTABLES -A INPUT -p ALL -i $EOP_IFACE -s $EOP_IP_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $EOP_IFACE -d $EOP_IP -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $EOP_IFACE -d $EOP_BCAST_ADDRESS -j ACCEPT
@@ -315,6 +321,8 @@ $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $WPA_BCAST_ADDRESS -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $BCAST_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $MCAST_RANGE -j ACCEPT
 
+$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP -j ACCEPT
+
 $IPTABLES -A INPUT -p ALL -i $LO_IFACE -j ACCEPT
 
 $IPTABLES -A INPUT -p ALL -d $INET_IP -m state --state ESTABLISHED,RELATED \
@@ -323,6 +331,7 @@ $IPTABLES -A INPUT -p ALL -d $INET_IP -m state --state ESTABLISHED,RELATED \
 # Otherwise log and take the default DROP
 $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
 --log-level DEBUG --log-prefix "IPT INPUT packet died: "
+
 
 ###############################
 # OUTPUT chain
