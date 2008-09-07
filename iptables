@@ -68,8 +68,8 @@ WPA_IP_RANGE="192.168.5.0/24"
 WPA_BCAST_ADDRESS="192.168.5.255"
 WPA_IFACE="wap1"
 
-MCAST_RANGE="224.0.0.0/28"
-BCAST_RANGE="255.0.0.0/24"
+MCAST_RANGE="224.0.0.0/4"
+BCAST_RANGE="255.0.0.0/8"
 
 LO_IFACE="lo"
 
@@ -90,6 +90,12 @@ do
   /sbin/modprobe $MODULE
 done < /etc/firewall/iptables-modules
 
+# disable everything
+$IPTABLES -F
+$IPTABLES -t nat -F
+$IPTABLES -X
+$IPTABLES -t nat -X
+
 #
 # If we're just stopping, do so now
 #
@@ -97,11 +103,6 @@ case "$1" in
 start)
     ;;
 stop)
-    # disable everything
-    $IPTABLES -F
-    $IPTABLES -t nat -F
-    $IPTABLES -X
-    $IPTABLES -t nat -X
     # enable wide-open plus NAT
     $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
     $IPTABLES -P INPUT ACCEPT
@@ -235,6 +236,8 @@ $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 443 -j allowed
 $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 1720 -j allowed
 # my gnunet node
 $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 2086 -j allowed
+# BitWise IM
+$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 4137 -j allowed
 # bzflag
 $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 5155 -j allowed
 # my freenet node
@@ -251,6 +254,8 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 53 -j ACCEPT
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 123 -j ACCEPT
 #$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2074 -j ACCEPT
 #$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4000 -j ACCEPT
+# BitWise IM
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4137 -j ACCEPT
 # my gnunet node
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2086 -j ACCEPT
 # Skype
@@ -264,10 +269,15 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
 #
 
 $IPTABLES -t nat -P PREROUTING ACCEPT
+# BitWise IM
+$IPTABLES -t nat -A PREROUTING -p udp --dport 4173 -i $INET_IFACE \
+  -j DNAT --to 192.168.1.7
+$IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
+  -j DNAT --to 192.168.1.7
 $IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 \
--m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level DEBUG --log-prefix "PRERT packet died (nat): "
-$IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 -j DROP
+  -m limit --limit 3/minute --limit-burst 3 -j LOG \
+  --log-level DEBUG --log-prefix "PRERT packet died (nat): "
+  $IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 -j DROP
 
 ##########################
 # INPUT chain
