@@ -38,6 +38,7 @@ IPTABLES="/sbin/iptables"
 # those who skips reading the documentation=)
 
 extint="ext0"
+#extint="eth4"
 extip="`/sbin/ifconfig $extint | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
 case "$extip" in
 [0-9]*.[0-9]*.[0-9]*.[0-9]*)
@@ -189,6 +190,12 @@ $IPTABLES -P INPUT DROP
 $IPTABLES -P OUTPUT ACCEPT
 $IPTABLES -P FORWARD DROP
 
+
+#
+# Let's not even talk to these folks
+#
+#$IPTABLES -A INPUT -s 69.50.142.11 -j DROP
+
 #
 # Create separate chains for ICMP and UDP to traverse
 #
@@ -265,19 +272,26 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
 ##########################
 # PREROUTING chain.
 #
-# Do some checks for obviously spoofed IP's 
-#
 
 $IPTABLES -t nat -P PREROUTING ACCEPT
+
 # BitWise IM
 $IPTABLES -t nat -A PREROUTING -p udp --dport 4173 -i $INET_IFACE \
   -j DNAT --to 192.168.1.7
 $IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
   -j DNAT --to 192.168.1.7
+
+# World of Warcraft
+$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
+  -j DNAT --to 192.168.5.19
+
+#
+# Do some checks for obviously spoofed IP's 
+#
 $IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 \
   -m limit --limit 3/minute --limit-burst 3 -j LOG \
   --log-level DEBUG --log-prefix "PRERT packet died (nat): "
-  $IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 -j DROP
+$IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 -j DROP
 
 ##########################
 # INPUT chain
