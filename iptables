@@ -69,6 +69,8 @@ WPA_IP_RANGE="192.168.5.0/24"
 WPA_BCAST_ADDRESS="192.168.5.255"
 WPA_IFACE="wap1"
 
+INT_RANGE="192.168.0.0/16"
+
 MCAST_RANGE="224.0.0.0/4"
 BCAST_RANGE="255.0.0.0/8"
 
@@ -285,14 +287,6 @@ $IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
 $IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
   -j DNAT --to 192.168.5.19
 
-#
-# Do some checks for obviously spoofed IP's 
-#
-$IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 \
-  -m limit --limit 3/minute --limit-burst 3 -j LOG \
-  --log-level DEBUG --log-prefix "PRERT packet died (nat): "
-$IPTABLES -t nat -A PREROUTING -i $INET_IFACE -s 192.168.0.0/16 -j DROP
-
 ##########################
 # INPUT chain
 #
@@ -313,6 +307,14 @@ $IPTABLES -A INPUT -i $INET_IFACE \
   -p tcp --dport 22 --syn -m recent --name sshattack \
   --rcheck --seconds 600 --hitcount 15 \
   -j DROP
+
+#
+# Do some checks for obviously spoofed IP's 
+#
+$IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
+  -m limit --limit 3/minute --limit-burst 3 -j LOG \
+  --log-level DEBUG --log-prefix "IPT spoofed packet died: "
+$IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
 
 #
 # accept established connections
