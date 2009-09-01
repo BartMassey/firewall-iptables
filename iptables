@@ -38,6 +38,7 @@ IPTABLES="/sbin/iptables"
 # those who skips reading the documentation=)
 
 extint="ext0"
+extint2="ext0:0"
 #extint="eth4"
 extip="`/sbin/ifconfig $extint | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
 case "$extip" in
@@ -48,6 +49,7 @@ case "$extip" in
   exit 1
   ;;
 esac
+extip2="`/sbin/ifconfig $extint2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
 
 LAN_IP="192.168.1.1"
 LAN_IP_RANGE="192.168.1.0/24"
@@ -78,6 +80,7 @@ LO_IFACE="lo"
 
 INET_IP=$extip
 INET_IFACE=$extint
+INET_IP2=$extip2
 
 #########
 # Load all required IPTables modules
@@ -278,10 +281,10 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
 $IPTABLES -t nat -P PREROUTING ACCEPT
 
 # BitWise IM
-$IPTABLES -t nat -A PREROUTING -p udp --dport 4173 -i $INET_IFACE \
-  -j DNAT --to 192.168.1.7
-$IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
-  -j DNAT --to 192.168.1.7
+#$IPTABLES -t nat -A PREROUTING -p udp --dport 4173 -i $INET_IFACE \
+#  -j DNAT --to 192.168.1.7
+#$IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
+#  -j DNAT --to 192.168.1.7
 
 # World of Warcraft
 $IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
@@ -321,6 +324,8 @@ $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
 #
 $IPTABLES -A INPUT -p ALL -d $INET_IP -m state --state ESTABLISHED,RELATED \
 -j ACCEPT
+$IPTABLES -A INPUT -p ALL -d $INET_IP2 -m state --state ESTABLISHED,RELATED \
+-j ACCEPT
 
 #
 # Rules for special networks not part of the Internet
@@ -345,6 +350,7 @@ $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $BCAST_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $MCAST_RANGE -j ACCEPT
 
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP -j ACCEPT
+$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WAP_IP_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WAP_BCAST_ADDRESS -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $BCAST_RANGE -j ACCEPT
@@ -357,6 +363,7 @@ $IPTABLES -A INPUT -p ALL -i $LO_IFACE -j ACCEPT
 #
 
 $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP -j ACCEPT
+$IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP2 -j ACCEPT
 $IPTABLES -A INPUT -p ICMP -i $INET_IFACE -j icmp_packets
 $IPTABLES -A INPUT -p TCP -i $INET_IFACE -j tcp_packets
 $IPTABLES -A INPUT -p UDP -i $INET_IFACE -j udpincoming_packets
