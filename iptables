@@ -59,7 +59,7 @@ LAN_IFACE="ent0"
 WAP_IP="192.168.3.1"
 WAP_IP_RANGE="192.168.3.0/24"
 WAP_BCAST_ADDRESS="192.168.3.255"
-WAP_IFACE="wap0"
+WAP_IFACE="wap1"
 
 EOP_IP="192.168.4.1"
 EOP_IP_RANGE="192.168.4.0/24"
@@ -69,7 +69,7 @@ EOP_IFACE="ept0"
 WPA_IP="192.168.5.1"
 WPA_IP_RANGE="192.168.5.0/24"
 WPA_BCAST_ADDRESS="192.168.5.255"
-WPA_IFACE="wap1"
+WPA_IFACE="wap0"
 
 INT_RANGE="192.168.0.0/16"
 
@@ -254,6 +254,10 @@ $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 4137 -j allowed
 $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 5155 -j allowed
 # my freenet node
 $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 21339 -j allowed
+# all others drop
+$IPTABLES -A tcp_packets -p TCP -s 0/0 -j LOG --log-level DEBUG \
+  --log-prefix "TCP pkt died (1): "
+$IPTABLES -A tcp_packets -p TCP -s 0/0 -j DROP
 
 #
 # UDP ports
@@ -273,6 +277,9 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2086 -j ACCEPT
 # Skype
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 49511 -j ACCEPT
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j LOG --log-level DEBUG \
+  --log-prefix "UDP pkt died (2): "
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j DROP
 
 ##########################
 # PREROUTING chain.
