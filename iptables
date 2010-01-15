@@ -181,11 +181,10 @@ $IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
 #
 # Bad TCP packets we don't want
 #
-$IPTABLES -A FORWARD -p tcp -j tcp_packets
-
 $IPTABLES -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 
 $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 --log-level DEBUG --log-prefix "IPT FORWARD packet died: "
+$IPTABLES -A FORWARD -p tcp -j tcp_packets
 
 #
 # Set default policies for the INPUT, FORWARD and OUTPUT chains
