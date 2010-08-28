@@ -54,6 +54,10 @@ stop)
 	$TC qdisc del dev $ENT root
 	$TC qdisc del dev $EXT root
 	;;
+restart|force-reload)
+	$0 stop
+	$0 start
+	;;
 *)
 	echo "tc-script: unknown command $1" >&2
 	exit 1
