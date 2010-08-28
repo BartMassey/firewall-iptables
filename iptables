@@ -81,6 +81,9 @@ LO_IFACE="lo"
 INET_IP=$extip
 INET_IFACE=$extint
 INET_IP2=$extip2
+# Note that no INET_IFACE2 can exist
+# because it's just an alias.  The
+# rules as stated work fine.
 
 #########
 # Load all required IPTables modules
@@ -196,11 +199,6 @@ $IPTABLES -P FORWARD DROP
 
 
 #
-# Let's not even talk to these folks
-#
-#$IPTABLES -A INPUT -s 69.50.142.11 -j DROP
-
-#
 # Create separate chains for ICMP and UDP to traverse
 #
 
@@ -301,6 +299,15 @@ $IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #
 
 #
+# Let's not even talk to these folks
+#
+$IPTABLES -A INPUT -s 67.60.207.230 -j DROP
+$IPTABLES -A INPUT -s 58.96.93.246 -j DROP
+$IPTABLES -A INPUT -s 98.127.56.13 -j DROP
+$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
+$IPTABLES -A INPUT -s 208.187.212.152 -j DROP
+
+#
 # Use iptables to stop ssh password guessing attacks
 # Thanks http://www.linuxmanagers.org/pipermail/linuxmanagers/2005-April/001752.html
 #
@@ -330,8 +337,9 @@ $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
 #
 $IPTABLES -A INPUT -p ALL -d $INET_IP -m state --state ESTABLISHED,RELATED \
 -j ACCEPT
-$IPTABLES -A INPUT -p ALL -d $INET_IP2 -m state --state ESTABLISHED,RELATED \
--j ACCEPT
+[ "$INET_IP2" != "" ] &&
+  $IPTABLES -A INPUT -p ALL -d $INET_IP2 -m state --state ESTABLISHED,RELATED \
+  -j ACCEPT
 
 #
 # Rules for special networks not part of the Internet
@@ -356,7 +364,8 @@ $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $BCAST_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $MCAST_RANGE -j ACCEPT
 
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
+[ "$INET_IP2" != "" ] &&
+  $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WAP_IP_RANGE -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WAP_BCAST_ADDRESS -j ACCEPT
 $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $BCAST_RANGE -j ACCEPT
@@ -369,7 +378,8 @@ $IPTABLES -A INPUT -p ALL -i $LO_IFACE -j ACCEPT
 #
 
 $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP2 -j ACCEPT
+[ "$INET_IP2" != "" ] &&
+  $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP2 -j ACCEPT
 $IPTABLES -A INPUT -p ICMP -i $INET_IFACE -j icmp_packets
 $IPTABLES -A INPUT -p TCP -i $INET_IFACE -j tcp_packets
 $IPTABLES -A INPUT -p UDP -i $INET_IFACE -j udpincoming_packets
@@ -382,5 +392,8 @@ $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
 ###############################
 # OUTPUT chain
 #
-# For now, just take the default ACCEPT here
+
+# 
+# Do not even send these folks anything
 #
+$IPTABLES -A OUTPUT -d 206.18.148.184 -j DROP
