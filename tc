@@ -14,10 +14,10 @@ start)
 	  root handle 1: htb default 99
 	$TC class add dev $ENT \
 	  parent 1: classid 1:1 \
-	  htb rate 200kbps burst 40kb
+	  htb rate 170kbps burst 40kb
 	$TC class add dev $ENT \
 	  parent 1:1 classid 1:99 \
-	  htb rate 100kbps burst 40kb
+	  htb rate 50kbps ceil 140kbps burst 40kb
 	$TC qdisc add dev $ENT \
 	  parent 1:99 handle 99 sfq perturb 10
 	# handle local traffic
@@ -26,15 +26,15 @@ start)
 	  root handle 1: htb
 	$TC class add dev $EXT \
 	  parent 1: classid 1:1 \
-	  htb rate 100kbps burst 40kb
+	  htb rate 50kbps ceil 140kbps burst 40kb
 	$TC filter add dev $EXT \
 	  protocol ip parent 1: u32 \
 	  match ip dst $EXTIP flowid 1:1
 	# handle remotes
 	cat <<EOF |
 	11 bartfan 1
-	12 joanie 1
-	13 bens-pc-eth0 1
+	12 joanie 2
+	13 bens-pc-eth0 2
 	14 bartserv-ent0 1
 EOF
 	while read CID HOST PRIO
@@ -42,7 +42,7 @@ EOF
 	    IP="`/local/bin/ipaddr $HOST | awk '{print $NF;}'`"
 	    H=`expr $CID + 10`
 	    $TC class add dev $ENT \
-	      parent 1:1 classid 1:$CID htb rate 100kbps burst 20kb
+	      parent 1:1 classid 1:$CID htb rate 50kbps ceil 140kbps burst 40kb
 	    $TC filter add dev $ENT \
 	      protocol ip parent 1:0 prio $PRIO u32 \
 	      match ip dst $IP flowid 1:$CID
