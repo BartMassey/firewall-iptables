@@ -1,0 +1,60 @@
+#!/bin/sh
+# Copyright © 2010 Bart Massey
+# Set up traffic shaping
+# See the HTB Users Guide
+#   http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm
+# for the source of much of this.
+ENT=ent0
+EXT=ext0
+TC="tc"
+case $1 in
+start)
+	# set up root
+	$TC qdisc add dev $ENT \
+	  root handle 1: htb default 99
+	$TC class add dev $ENT \
+	  parent 1: classid 1:1 \
+	  htb rate 200kbps burst 40kb
+	$TC class add dev $ENT \
+	  parent 1:1 classid 1:99 \
+	  htb rate 100kbps burst 40kb
+	$TC qdisc add dev $ENT \
+	  parent 1:99 handle 99 sfq perturb 10
+	# handle local traffic
+	EXTIP="`/local/bin/ipaddr po8.org | awk '{print $NF;}'`"
+	$TC qdisc add dev $EXT \
+	  root handle 1: htb
+	$TC class add dev $EXT \
+	  parent 1: classid 1:1 \
+	  htb rate 100kbps burst 40kb
+	$TC filter add dev $EXT \
+	  protocol ip parent 1: u32 \
+	  match ip dst $EXTIP flowid 1:1
+	# handle remotes
+	cat <<EOF |
+	11 bartfan 1
+	12 joanie 1
+	13 bens-pc-eth0 1
+	14 bartserv-ent0 1
+EOF
+	while read CID HOST PRIO
+	do
+	    IP="`/local/bin/ipaddr $HOST | awk '{print $NF;}'`"
+	    H=`expr $CID + 10`
+	    $TC class add dev $ENT \
+	      parent 1:1 classid 1:$CID htb rate 100kbps burst 20kb
+	    $TC filter add dev $ENT \
+	      protocol ip parent 1:0 prio $PRIO u32 \
+	      match ip dst $IP flowid 1:$CID
+	    $TC qdisc add dev $ENT \
+	      parent 1:$CID handle $H sfq perturb 10
+	done
+	;;
+stop)
+	$TC qdisc del dev $ENT root
+	$TC qdisc del dev $EXT root
+	;;
+*)
+	echo "tc-script: unknown command $1" >&2
+	exit 1
+esac
