@@ -26,7 +26,7 @@ start)
 	  root handle 1: htb
 	$TC class add dev $EXT \
 	  parent 1: classid 1:1 \
-	  htb rate 50kbps ceil 140kbps burst 40kb
+	  htb rate 50kbps ceil 100kbps burst 40kb
 	$TC filter add dev $EXT \
 	  protocol ip parent 1: u32 \
 	  match ip dst $EXTIP flowid 1:1
