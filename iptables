@@ -273,7 +273,7 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 53 -j ACCEPT
 # NTP
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 123 -j ACCEPT
 #$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2074 -j ACCEPT
-#$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4000 -j ACCEPT
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4000 -j DROP
 # BitWise IM
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4137 -j ACCEPT
 # my gnunet node
@@ -306,6 +306,7 @@ $IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #
 
 #
+# blacklisted hosts
 # Let's not even talk to these folks
 #
 $IPTABLES -A INPUT -s 67.60.207.230 -j DROP
@@ -313,6 +314,7 @@ $IPTABLES -A INPUT -s 58.96.93.246 -j DROP
 $IPTABLES -A INPUT -s 98.127.56.13 -j DROP
 $IPTABLES -A INPUT -s 206.18.148.184 -j DROP
 $IPTABLES -A INPUT -s 208.187.212.152 -j DROP
+$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
 
 #
 # Use iptables to stop ssh password guessing attacks
