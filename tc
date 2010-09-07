@@ -37,10 +37,14 @@ start)
 	12 joanie 3
 	13 bens-pc-power 2
 	14 bartserv-ent0 1
+        15 192.168.5.0/24 3
 EOF
 	while read CID HOST PRIO
 	do
-	    IP="`/local/bin/ipaddr $HOST | awk '{print $NF;}'`"
+	    case $HOST in
+	    [0-9]*) IP=$HOST ;;
+	    *)      IP="`/local/bin/ipaddr $HOST | awk '{print $NF;}'`" ;;
+	    esac
 	    H=`expr $CID + 10`
 	    $TC class add dev $ENT \
 	      parent 1:5 classid 1:$CID htb rate 100kbps ceil 120kbps cburst 40kb
