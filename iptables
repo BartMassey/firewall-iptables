@@ -272,6 +272,7 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --dport 53 -j ACCEPT
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 53 -j ACCEPT
 # NTP
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 123 -j ACCEPT
+# Lord only knows
 #$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2074 -j ACCEPT
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4000 -j DROP
 # BitWise IM
