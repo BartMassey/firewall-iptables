@@ -33,8 +33,8 @@ start)
 	# handle remotes
 	cat <<EOF |
 	11 bartfan 1
-	12 joanie 2
-	13 bens-pc-eth0 2
+	12 joanie 3
+	13 bens-pc-power 2
 	14 bartserv-ent0 1
 EOF
 	while read CID HOST PRIO
