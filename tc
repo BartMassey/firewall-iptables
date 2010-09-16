@@ -12,6 +12,16 @@ start)
 	# set up root
 	$TC qdisc add dev $ENT \
 	  root handle 1 htb default 99
+	## handle entirely internal traffic involving this host
+	$TC class add dev $ENT \
+	  parent 1 classid 1:4 \
+	  htb rate 1024mbps
+	$TC qdisc add dev $ENT \
+	  parent 1:4 sfq perturb 10
+	$TC filter add dev $ENT \
+	  protocol ip parent 1:4 u32 \
+	  match ip src 192.168.1.0/24 flowid 1:4
+	# handle external traffic incoming through this host
 	$TC class add dev $ENT \
 	  parent 1 classid 1:5 \
 	  htb rate 170kbps
@@ -21,7 +31,7 @@ start)
 	  htb rate 170kbps
 	$TC qdisc add dev $ENT \
 	  parent 1:99 handle 99 sfq perturb 10
-	# handle outgoing local traffic
+	# handle local traffic outgoing through this host
 	EXTIP="`/local/bin/ipaddr po8.org | awk '{print $NF;}'`"
 	$TC qdisc add dev $EXT \
 	  root handle 1 htb
@@ -34,10 +44,10 @@ start)
 	# handle remotes
 	cat <<EOF |
 	11 bartfan 1
-	12 joanie 3
+	12 bartserv-ent0 1
 	13 bens-pc-power 2
-	14 bartserv-ent0 1
-        15 192.168.5.0/24 3
+        14 192.168.5.0/24 2
+	15 joanie 3
 EOF
 	while read CID HOST PRIO
 	do
