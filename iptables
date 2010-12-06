@@ -299,8 +299,10 @@ $IPTABLES -t nat -P PREROUTING ACCEPT
 #  -j DNAT --to 192.168.1.7
 
 # World of Warcraft
-$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
-  -j DNAT --to 192.168.5.19
+#$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
+#  -j DNAT --to 192.168.5.19
+$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE \
+  -j DROP
 
 ##########################
 # INPUT chain
