@@ -15,12 +15,13 @@ start)
 	## handle entirely internal traffic involving this host
 	$TC class add dev $ENT \
 	  parent 1 classid 1:4 \
-	  htb rate 1024mbps
+	  htb rate 1000mbps
 	$TC qdisc add dev $ENT \
 	  parent 1:4 sfq perturb 10
 	$TC filter add dev $ENT \
 	  protocol ip parent 1:4 u32 \
-	  match ip src 192.168.1.0/24 flowid 1:4
+	  match ip src 192.168.0.0/16 flowid 1:4 \
+	  match ip dst 192.168.0.0/16 flowid 1:4
 	# handle external traffic incoming through this host
 	$TC class add dev $ENT \
 	  parent 1 classid 1:5 \
@@ -57,7 +58,7 @@ EOF
 	    esac
 	    H=`expr $CID + 10`
 	    $TC class add dev $ENT \
-	      parent 1:5 classid 1:$CID htb rate 100kbps ceil 120kbps cburst 40kb
+	      parent 1:5 classid 1:$CID htb rate 100mbps ceil 120mbps cburst 40kb
 	    $TC filter add dev $ENT \
 	      protocol ip parent 1:0 prio $PRIO u32 \
 	      match ip dst $IP flowid 1:$CID
