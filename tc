@@ -40,12 +40,12 @@ start)
 	$TC qdisc add dev $ENT \
 	  parent 1:99 handle 99 sfq perturb 10
 	# handle local traffic outgoing through this host
-	EXTIP="`/local/bin/ipaddr po8.org | awk '{print $NF;}'`"
 	$TC qdisc add dev $EXT \
 	  root handle 1 htb
 	$TC class add dev $EXT \
 	  parent 1 classid 1:5 \
 	  htb rate 100kbps ceil 120kbps cburst 40kb
+	EXTIP="`/local/bin/ipaddr po8.org | awk '{print $NF;}'`"
 	$TC filter add dev $EXT \
 	  protocol ip parent 1:5 u32 \
 	  match ip dst $EXTIP flowid 1:5
