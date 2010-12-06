@@ -18,10 +18,17 @@ start)
 	  htb rate 1000mbps
 	$TC qdisc add dev $ENT \
 	  parent 1:4 sfq perturb 10
-	$TC filter add dev $ENT \
-	  protocol ip parent 1:4 u32 \
-	  match ip src 192.168.0.0/16 flowid 1:4 \
-	  match ip dst 192.168.0.0/16 flowid 1:4
+	for i in 0 1 2 3 4 5
+	do
+	    $TC filter add dev $ENT \
+	      protocol ip parent 1:4 u32 \
+	      match ip src 192.168.$i.1 flowid 1:4 \
+	      match ip dst 192.168.0.0/16 flowid 1:4
+	    $TC filter add dev $ENT \
+	      protocol ip parent 1:4 u32 \
+	      match ip src 192.168.0.0/16 flowid 1:4 \
+	      match ip dst 192.168.$i.1 flowid 1:4
+	done
 	# handle external traffic incoming through this host
 	$TC class add dev $ENT \
 	  parent 1 classid 1:5 \
