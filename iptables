@@ -40,8 +40,7 @@ TC="/etc/firewall/tc"
 # those who skips reading the documentation=)
 
 extint="ext0"
-extint2="ext0:0"
-#extint="eth4"
+extint2="ext1"
 extip="`/sbin/ifconfig $extint | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
 case "$extip" in
 [0-9]*.[0-9]*.[0-9]*.[0-9]*)
@@ -83,9 +82,13 @@ LO_IFACE="lo"
 INET_IP=$extip
 INET_IFACE=$extint
 INET_IP2=$extip2
-# Note that no INET_IFACE2 can exist
-# because it's just an alias.  The
-# rules as stated work fine.
+INET_IFACE2=$extint2
+# Note that INET_IFACE2 shouldn't exist
+# if it's just an alias.  The
+# rules as stated work fine work fine
+# in this case if you comment out INET_IFACE2.
+INET2=false
+[ "$INET_IFACE2" != "" ] && INET2=true
 
 #########
 # Load all required IPTables modules
@@ -117,6 +120,7 @@ stop)
     $TC stop
     # enable wide-open plus NAT
     $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
+    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP
     $IPTABLES -P INPUT ACCEPT
     $IPTABLES -P OUTPUT ACCEPT
     $IPTABLES -P FORWARD ACCEPT
@@ -301,8 +305,8 @@ $IPTABLES -t nat -P PREROUTING ACCEPT
 # World of Warcraft
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DNAT --to 192.168.5.19
-$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE \
-  -j DROP
+#$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE \
+#  -j DROP
 
 ##########################
 # INPUT chain
@@ -336,6 +340,21 @@ $IPTABLES -A INPUT -i $INET_IFACE \
   --rcheck --seconds 600 --hitcount 15 \
   -j DROP
 
+if $INET2
+then
+  $IPTABLES -A INPUT -i $INET_IFACE2 \
+    -p tcp --dport 22 --syn -m recent --name sshattack \
+    --set
+  $IPTABLES -A INPUT -i $INET_IFACE2 \
+    -p tcp --dport 22 --syn -m recent --name sshattack \
+    --rcheck --seconds 600 --hitcount 15 \
+    -j LOG --log-prefix 'SSH REJECT: '
+  $IPTABLES -A INPUT -i $INET_IFACE2 \
+    -p tcp --dport 22 --syn -m recent --name sshattack \
+    --rcheck --seconds 600 --hitcount 15 \
+    -j DROP
+fi
+
 #
 # Do some checks for obviously spoofed IP's 
 #
@@ -343,6 +362,14 @@ $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
   -m limit --limit 3/minute --limit-burst 3 -j LOG \
   --log-level DEBUG --log-prefix "IPT spoofed packet died: "
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
+
+if $INET2
+then
+  $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE \
+    -m limit --limit 3/minute --limit-burst 3 -j LOG \
+    --log-level DEBUG --log-prefix "IPT spoofed packet died: "
+  $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE -j DROP
+fi
 
 #
 # accept established connections
@@ -395,6 +422,14 @@ $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP -j ACCEPT
 $IPTABLES -A INPUT -p ICMP -i $INET_IFACE -j icmp_packets
 $IPTABLES -A INPUT -p TCP -i $INET_IFACE -j tcp_packets
 $IPTABLES -A INPUT -p UDP -i $INET_IFACE -j udpincoming_packets
+
+if $INET2
+then
+  $IPTABLES -A INPUT -p ALL -i $INET_IFACE2 -d $INET_IP -j ACCEPT
+  $IPTABLES -A INPUT -p ICMP -i $INET_IFACE2 -j icmp_packets
+  $IPTABLES -A INPUT -p TCP -i $INET_IFACE2 -j tcp_packets
+  $IPTABLES -A INPUT -p UDP -i $INET_IFACE2 -j udpincoming_packets
+fi
 
 # Otherwise log and take the default DROP
 $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
