@@ -51,6 +51,13 @@ case "$extip" in
   ;;
 esac
 extip2="`/sbin/ifconfig $extint2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
+case "$extip2" in
+[0-9]*.[0-9]*.[0-9]*.[0-9]*)
+  ;;
+*)
+  unset extint2
+  ;;
+esac
 
 LAN_IP="192.168.1.1"
 LAN_IP_RANGE="192.168.1.0/24"
@@ -120,7 +127,7 @@ stop)
     $TC stop
     # enable wide-open plus NAT
     $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
-    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP
+    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
     $IPTABLES -P INPUT ACCEPT
     $IPTABLES -P OUTPUT ACCEPT
     $IPTABLES -P FORWARD ACCEPT
@@ -417,15 +424,17 @@ $IPTABLES -A INPUT -p ALL -i $LO_IFACE -j ACCEPT
 #
 
 $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP -j ACCEPT
-[ "$INET_IP2" != "" ] &&
-  $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP2 -j ACCEPT
+if [ "$INET_IP2" != "" ]
+then
+   $INET2 || $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP2 -j ACCEPT
+fi
 $IPTABLES -A INPUT -p ICMP -i $INET_IFACE -j icmp_packets
 $IPTABLES -A INPUT -p TCP -i $INET_IFACE -j tcp_packets
 $IPTABLES -A INPUT -p UDP -i $INET_IFACE -j udpincoming_packets
 
 if $INET2
 then
-  $IPTABLES -A INPUT -p ALL -i $INET_IFACE2 -d $INET_IP -j ACCEPT
+  $IPTABLES -A INPUT -p ALL -i $INET_IFACE2 -d $INET_IP2 -j ACCEPT
   $IPTABLES -A INPUT -p ICMP -i $INET_IFACE2 -j icmp_packets
   $IPTABLES -A INPUT -p TCP -i $INET_IFACE2 -j tcp_packets
   $IPTABLES -A INPUT -p UDP -i $INET_IFACE2 -j udpincoming_packets
