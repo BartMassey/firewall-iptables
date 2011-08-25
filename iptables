@@ -183,7 +183,7 @@ $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
 
 $IPTABLES -N badguest
 $IPTABLES -A badguest -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level DEBUG --log-prefix "IPT bad guest packet died: "
+--log-level debug --log-prefix "IPT bad guest packet died: "
 $IPTABLES -A badguest -j DROP
 
 # Special INPUT rules to decide which IP's to allow.
@@ -204,7 +204,7 @@ $IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
 #
 $IPTABLES -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 
 $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level DEBUG --log-prefix "IPT FORWARD packet died: "
+--log-level debug --log-prefix "IPT FORWARD packet died: "
 $IPTABLES -A FORWARD -p tcp -j tcp_packets
 
 #
@@ -231,7 +231,7 @@ $IPTABLES -N allowed
 $IPTABLES -A allowed -p TCP --syn -j ACCEPT
 $IPTABLES -A allowed -p TCP -m state --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A allowed -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level DEBUG --log-prefix "IN/TCP pkt died (allowed): "
+--log-level debug --log-prefix "IN/TCP pkt died (allowed): "
 $IPTABLES -A allowed -p TCP -j DROP
 
 #
@@ -270,7 +270,7 @@ $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 5155 -j allowed
 # my freenet node
 $IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 21339 -j allowed
 # all others drop
-$IPTABLES -A tcp_packets -p TCP -s 0/0 -j LOG --log-level DEBUG \
+$IPTABLES -A tcp_packets -p TCP -s 0/0 -j LOG --log-level debug \
   --log-prefix "TCP pkt died (1): "
 $IPTABLES -A tcp_packets -p TCP -s 0/0 -j DROP
 
@@ -293,7 +293,7 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2086 -j ACCEPT
 # Skype
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 49511 -j ACCEPT
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j LOG --log-level DEBUG \
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j LOG --log-level debug \
   --log-prefix "UDP pkt died (2): "
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j DROP
 
@@ -367,14 +367,14 @@ fi
 #
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
   -m limit --limit 3/minute --limit-burst 3 -j LOG \
-  --log-level DEBUG --log-prefix "IPT spoofed packet died: "
+  --log-level debug --log-prefix "IPT spoofed packet died: "
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
 
 if $INET2
 then
   $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE \
     -m limit --limit 3/minute --limit-burst 3 -j LOG \
-    --log-level DEBUG --log-prefix "IPT spoofed packet died: "
+    --log-level debug --log-prefix "IPT spoofed packet died: "
   $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE -j DROP
 fi
 
@@ -442,7 +442,7 @@ fi
 
 # Otherwise log and take the default DROP
 $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level DEBUG --log-prefix "IPT INPUT packet died: "
+--log-level debug --log-prefix "IPT INPUT packet died: "
 
 
 ###############################
