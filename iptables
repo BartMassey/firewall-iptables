@@ -50,13 +50,18 @@ case "$extip" in
   exit 1
   ;;
 esac
-extip2="`/sbin/ifconfig $extint2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
-case "$extip2" in
-[0-9]*.[0-9]*.[0-9]*.[0-9]*)
-  ;;
+/sbin/ifconfig $extint2 >/dev/null 2>&1
+case $? in
+0)
+	extip2="`/sbin/ifconfig $extint2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
+	case "$extip2" in
+	[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
+	*) unset extint2 ;;
+        esac
+	;;
 *)
-  unset extint2
-  ;;
+	unset extint2
+	;;
 esac
 
 LAN_IP="192.168.1.1"
@@ -125,12 +130,20 @@ start)
     ;;
 stop)
     $TC stop
-    # enable wide-open plus NAT
-    $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
-    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
+    # Change all chains to default accept
     $IPTABLES -P INPUT ACCEPT
     $IPTABLES -P OUTPUT ACCEPT
     $IPTABLES -P FORWARD ACCEPT
+    # Kill all the rules and chains
+    iptables -F
+    iptables -X
+    # Make sure all chains are default accept
+    $IPTABLES -P INPUT ACCEPT
+    $IPTABLES -P OUTPUT ACCEPT
+    $IPTABLES -P FORWARD ACCEPT
+    # Set up open NAT
+    $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
+    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
     exit 0
     ;;
 restart|force-reload)
@@ -154,6 +167,15 @@ echo "1" > /proc/sys/net/ipv4/ip_forward
 # Dynamic IP users:
 #
 #echo "1" > /proc/sys/net/ipv4/ip_dynaddr
+
+# Kill all the rules and chains
+iptables -F
+iptables -X
+
+# Set default policies for the INPUT, FORWARD and OUTPUT chains
+$IPTABLES -P INPUT DROP
+$IPTABLES -P OUTPUT ACCEPT
+$IPTABLES -P FORWARD DROP
 
 #
 # tcp_packets chain
@@ -206,14 +228,6 @@ $IPTABLES -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 --log-level debug --log-prefix "IPT FORWARD packet died: "
 $IPTABLES -A FORWARD -p tcp -j tcp_packets
-
-#
-# Set default policies for the INPUT, FORWARD and OUTPUT chains
-#
-
-$IPTABLES -P INPUT DROP
-$IPTABLES -P OUTPUT ACCEPT
-$IPTABLES -P FORWARD DROP
 
 
 #
