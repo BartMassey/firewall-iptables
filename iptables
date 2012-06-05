@@ -307,6 +307,11 @@ $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2086 -j ACCEPT
 # Skype
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 49511 -j ACCEPT
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
+# MDNS
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --dport 5353 -j ACCEPT
+# IPP: we'll kill it later if it's going to the wrong place
+$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 631 -j ACCEPT
+# drop everything else with logging
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j LOG --log-level debug \
   --log-prefix "UDP pkt died (2): "
 $IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j DROP
@@ -463,9 +468,13 @@ $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
 # OUTPUT chain
 #
 
-# 
+# Drop IPP packets out the external interfaces
+# because CUPS sucks and cannot.
+# http://cups.org/str.php?L3020+P0+S-2+C0+I0+E0+M1000+Q
+$IPTABLES -A OUTPUT -p UDP --dport 631 -o $INET_IFACE -j DROP
+$INET2 && $IPTABLES -A OUTPUT -p UDP --dport 631 -o $INET_IFACE2 -j DROP
+
 # Do not even send these folks anything
-#
 $IPTABLES -A OUTPUT -d 206.18.148.184 -j DROP
 
 $TC start
