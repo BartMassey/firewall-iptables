@@ -348,6 +348,7 @@ $IPTABLES -A INPUT -s 98.127.56.13 -j DROP
 $IPTABLES -A INPUT -s 206.18.148.184 -j DROP
 $IPTABLES -A INPUT -s 208.187.212.152 -j DROP
 $IPTABLES -A INPUT -s 206.18.148.184 -j DROP
+$IPTABLES -A INPUT -s 23.23.0.0/16 -j DROP
 
 #
 # Use iptables to stop ssh password guessing attacks
