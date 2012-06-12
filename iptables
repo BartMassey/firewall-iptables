@@ -64,6 +64,20 @@ case $? in
 	;;
 esac
 
+#/sbin/ifconfig $extinthole >/dev/null 2>&1
+#case $? in
+#0)
+#	extiphole="`/sbin/ifconfig $extinthole | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
+#	case "$extiphold" in
+#	[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
+#	*) unset extinthole ;;
+#        esac
+#	;;
+#*)
+#	unset extinthole
+#	;;
+#esac
+
 LAN_IP="192.168.1.1"
 LAN_IP_RANGE="192.168.1.0/24"
 LAN_BCAST_ADDRESS="192.168.1.255"
