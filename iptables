@@ -1,8 +1,9 @@
 #!/bin/sh
 #
-# rc.firewall - Initial SIMPLE IP Firewall script for Linux 2.4.x and iptables
+# rc.firewall - IP Firewall script for Linux and iptables
 #
-# Copyright (C) 2001  Oskar Andreasson &lt;blueflux@koffein.net&gt;
+# Copyright (C) 2001  Oskar Andreasson <blueflux@koffein.net>
+# Extensively rewritten by Bart Massey <bart@cs.pdx.edu> 2001-2012.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,30 +20,71 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-IPTABLES="/sbin/iptables"
-[ -x $IPTABLES ] || exit 0
+#
+# To configure this, all you should need to do is set the
+# interface names of your network interfaces. The script
+# would auto-discover everything else.  Unfortunately, this
+# still needs fixing. Set all the configuration variables
+# below for now.
+#
+# Structure of your internal network.
+INT_RANGE="192.168.0.0/16"
+# Names of your external interfaces. These will be autoconfigured.
+# It is harmless to give a nonexistent name for INET_IFACE2: this
+# will be discovered on startup.
+INET_IFACE="ext0"
+INET_IFACE2="ext1"
+# Trusted LAN interface. Should be autoconfigured.
+LAN_IFACE="ent0"
+LAN_IP="192.168.1.1"
+LAN_IP_RANGE="192.168.1.0/24"
+LAN_BCAST_ADDRESS="192.168.1.255"
+# Semi-trusted WEP WAP interface. Should be autoconfigured.
+WAP_IFACE="wap1-wifi0"
+WAP_IP="192.168.3.1"
+WAP_IP_RANGE="192.168.3.0/24"
+WAP_BCAST_ADDRESS="192.168.3.255"
+WAP_BCAST_RANGE="255.0.0.0/8"
+# Trusted Ethernet-over-Power LAN interface. Should be
+# autoconfigured.
+EOP_IFACE="ept0"
+EOP_IP="192.168.4.1"
+EOP_IP_RANGE="192.168.4.0/24"
+EOP_BCAST_ADDRESS="192.168.4.255"
+# Trusted WPA WAP interface. Should be autoconfigured.
+WPA_IFACE="wap0-wifi0"
+WPA_IP="192.168.5.1"
+WPA_IP_RANGE="192.168.5.0/24"
+WPA_BCAST_ADDRESS="192.168.5.255"
+# Name of your local interface. You shouldn't even need to
+# set this, as it should be autoconfigured.
+LO_IFACE="lo"
 
+#
+# Make sure we can run.
+#
+IPTABLES="/sbin/iptables"
+if [ -x $IPTABLES ]
+then
+    :
+else
+    echo "$0: can't find $IPTABLES" >&2
+    exit 1
+fi
+
+#
+# Hook for optional traffic-shaping script.
+#
 TC="/etc/firewall/tc"
 [ -x $TC ] || TC=":"
 
-###########
-# Configuration options, these will speed you up getting this script to
-# work with your own setup.
-
 #
-# your LAN's IP range and localhost IP. /24 means to only use the first 24 
-# bits of the 32 bit IP adress. the same as netmask 255.255.255.0
+# Set up the external interface. It is an error not to have one
+# of these. You may have two.
 #
-# INET_IP is used by me to allow myself to do anything to myself, might
-# be a security risc but sometimes I want this. If you don't have a static
-# IP, I suggest not using this option at all for now but it's stil
-# enabled per default and will add some really nifty security bugs for all
-# those who skips reading the documentation=)
-
-extint="ext0"
-extint2="ext1"
-extip="`/sbin/ifconfig $extint | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
-case "$extip" in
+# Primary interface
+INET_IP="`/sbin/ifconfig $INET_IFACE | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
+case "$INET_IP" in
 [0-9]*.[0-9]*.[0-9]*.[0-9]*)
   ;;
 *)
@@ -50,87 +92,46 @@ case "$extip" in
   exit 1
   ;;
 esac
-/sbin/ifconfig $extint2 >/dev/null 2>&1
-case $? in
-0)
-	extip2="`/sbin/ifconfig $extint2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
-	case "$extip2" in
-	[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
-	*) unset extint2 ;;
-        esac
-	;;
-*)
-	unset extint2
-	;;
-esac
-
-#/sbin/ifconfig $extinthole >/dev/null 2>&1
-#case $? in
-#0)
-#	extiphole="`/sbin/ifconfig $extinthole | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
-#	case "$extiphold" in
-#	[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
-#	*) unset extinthole ;;
-#        esac
-#	;;
-#*)
-#	unset extinthole
-#	;;
-#esac
-
-LAN_IP="192.168.1.1"
-LAN_IP_RANGE="192.168.1.0/24"
-LAN_BCAST_ADDRESS="192.168.1.255"
-LAN_IFACE="ent0"
-
-WAP_IP="192.168.3.1"
-WAP_IP_RANGE="192.168.3.0/24"
-WAP_BCAST_ADDRESS="192.168.3.255"
-WAP_IFACE="wap1-wifi0"
-
-EOP_IP="192.168.4.1"
-EOP_IP_RANGE="192.168.4.0/24"
-EOP_BCAST_ADDRESS="192.168.4.255"
-EOP_IFACE="ept0"
-
-WPA_IP="192.168.5.1"
-WPA_IP_RANGE="192.168.5.0/24"
-WPA_BCAST_ADDRESS="192.168.5.255"
-WPA_IFACE="wap0-wifi0"
-
-INT_RANGE="192.168.0.0/16"
-
-MCAST_RANGE="224.0.0.0/4"
-BCAST_RANGE="255.0.0.0/8"
-
-LO_IFACE="lo"
-
-INET_IP=$extip
-INET_IFACE=$extint
-INET_IP2=$extip2
-INET_IFACE2=$extint2
-# Note that INET_IFACE2 shouldn't exist
-# if it's just an alias.  The
-# rules as stated work fine work fine
-# in this case if you comment out INET_IFACE2.
+# Secondary interface
+# Note that INET_IFACE2 shouldn't exist if it's just an
+# alias. The rules as stated work fine in this case if you
+# comment out INET_IFACE2 above.
 INET2=false
-[ "$INET_IFACE2" != "" ] && INET2=true
+if [ "$INET_IFACE2" != "" ]
+then 
+    /sbin/ifconfig "$INET_IFACE2" >/dev/null 2>&1
+    case $? in
+    0)
+        INET_IP2="`/sbin/ifconfig $INET_IFACE2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
+        case "$INET_IP2" in
+        [0-9]*.[0-9]*.[0-9]*.[0-9]*)  IP2=true ;;
+        *)  unset INET_IFACE2 ;;
+        esac
+        ;;
+    *)
+        unset INET_IFACE2
+        ;;
+    esac
+fi
 
-#########
+#
+# Symbolic name for an invariant range.
+#
+MCAST_RANGE="224.0.0.0/4"
+
+#
 # Load all required IPTables modules
 #
-
-#
-# Needed to initially load modules
-#
 /sbin/depmod -a
-
 while read MODULE
 do
   /sbin/modprobe $MODULE
 done < /etc/firewall/iptables-modules
 
+#
 # disable everything
+#
+$TC stop
 $IPTABLES -F
 $IPTABLES -t nat -F
 $IPTABLES -X
@@ -143,19 +144,12 @@ case "$1" in
 start)
     ;;
 stop)
-    $TC stop
-    # Change all chains to default accept
-    $IPTABLES -P INPUT ACCEPT
-    $IPTABLES -P OUTPUT ACCEPT
-    $IPTABLES -P FORWARD ACCEPT
-    # Kill all the rules and chains
-    iptables -F
-    iptables -X
     # Make sure all chains are default accept
     $IPTABLES -P INPUT ACCEPT
     $IPTABLES -P OUTPUT ACCEPT
     $IPTABLES -P FORWARD ACCEPT
     # Set up open NAT
+    $IPTABLES -t nat -P PREROUTING ACCEPT
     $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
     $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
     exit 0
@@ -171,215 +165,215 @@ restart|force-reload)
 esac
 
 #
-# Enable ip_forward, this is critical since it is turned off as defaul in 
-# Linux.
+# Enable ip_forward, this is critical since it is turned off
+# by default in Linux.
 #
-
 echo "1" > /proc/sys/net/ipv4/ip_forward
 
 #
-# Dynamic IP users:
+# This would supposedly enable dynamic IP users. However,
+# this script probably doesn't work for this case anymore,
+# so commented out for now.
 #
 #echo "1" > /proc/sys/net/ipv4/ip_dynaddr
 
-# Kill all the rules and chains
-iptables -F
-iptables -X
-
-# Set default policies for the INPUT, FORWARD and OUTPUT chains
+#
+# Set default policies for the built-in chains
+#
 $IPTABLES -P INPUT DROP
 $IPTABLES -P OUTPUT ACCEPT
 $IPTABLES -P FORWARD DROP
-
-#
-# tcp_packets chain
-#
-# Take care of bad TCP  packets that we don't want
-#
-
-$IPTABLES -N tcp_packets
-$IPTABLES -A tcp_packets -p tcp ! --syn -m state --state NEW -j LOG \
-  --log-prefix "New not syn:"
-$IPTABLES -A tcp_packets -p tcp ! --syn -m state --state NEW -j DROP
-
-#
-# Enable simple IP Forwarding and Network Address Translation
-#
-
+# Set up open NAT
+$IPTABLES -t nat -P PREROUTING ACCEPT
 $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
+$INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
 
-#
-# Accept the packets we actually want to forward
-#
-
-##########################
 #
 # Report on guest WAP packets that try to get in
 #
-
 $IPTABLES -N badguest
 $IPTABLES -A badguest -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level debug --log-prefix "IPT bad guest packet died: "
+  --log-level debug --log-prefix "IPT bad guest packet died: "
 $IPTABLES -A badguest -j DROP
 
-# Special INPUT rules to decide which IP's to allow.
-# Our guest network setup is a bit magic.
-
-$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -d $LAN_IP_RANGE -j badguest
-$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -d $EOP_IP_RANGE -j badguest
-$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -d $WPA_IP_RANGE -j badguest
-$IPTABLES -A FORWARD -p ALL -i $WAP_IFACE -j ACCEPT
-
-$IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
-$IPTABLES -A FORWARD -i $WAP_IFACE -j ACCEPT
-$IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
-$IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
+#
+# New not-syn packets should be dropped.
+#
+$IPTABLES -N tcp_checks
+$IPTABLES -P tcp_checks DROP
+$IPTABLES -A tcp_checks -p tcp --syn -j RETURN
+$IPTABLES -A tcp_checks -p tcp -m state --state ESTABLISHED,RELATED -j RETURN
+$IPTABLES -A tcp_checks -j LOG \
+  --log-level debug --log-prefix "IPT unknown TCP non-SYN: "
 
 #
-# Bad TCP packets we don't want
+# Take care of bad TCP packets that we don't want
 #
-$IPTABLES -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 
-$IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level debug --log-prefix "IPT FORWARD packet died: "
-$IPTABLES -A FORWARD -p tcp -j tcp_packets
-
-
-#
-# Create separate chains for ICMP and UDP to traverse
-#
-
-$IPTABLES -N icmp_packets
-$IPTABLES -N udpincoming_packets
-
-#
-# The allowed chain for TCP connections
-#
-
-$IPTABLES -N allowed
-$IPTABLES -A allowed -p TCP --syn -j ACCEPT
-$IPTABLES -A allowed -p TCP -m state --state ESTABLISHED,RELATED -j ACCEPT
-$IPTABLES -A allowed -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level debug --log-prefix "IN/TCP pkt died (allowed): "
-$IPTABLES -A allowed -p TCP -j DROP
-
-#
-# ICMP rules
-#
-
-$IPTABLES -A icmp_packets -p ICMP -s 0/0 --icmp-type 8 -j ACCEPT
-$IPTABLES -A icmp_packets -p ICMP -s 0/0 --icmp-type 11 -j ACCEPT
-
-#
-# TCP rules
-#
-
+$IPTABLES -N tcp_packets
+# Do checks
+$IPTABLES -A tcp_packets -p tcp -j tcp_checks
 # ftp
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 21 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 21 -j ACCEPT
 # ssh
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 22 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 22 -j ACCEPT
 # smtp
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 25 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 25 -j ACCEPT
 # DNS
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 53 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 53 -j ACCEPT
 # http
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 80 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 80 -j ACCEPT
 # auth
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 113 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 113 -j ACCEPT
 # https
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 443 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 443 -j ACCEPT
 # h323/h225 host call
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 1720 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 1720 -j ACCEPT
 # my gnunet node
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 2086 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 2086 -j ACCEPT
 # BitWise IM
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 4137 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 4137 -j ACCEPT
 # bzflag
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 5155 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 5155 -j ACCEPT
 # my freenet node
-$IPTABLES -A tcp_packets -p TCP -s 0/0 --dport 21339 -j allowed
+$IPTABLES -A tcp_packets -p tcp --dport 21339 -j ACCEPT
 # all others drop
-$IPTABLES -A tcp_packets -p TCP -s 0/0 -j LOG --log-level debug \
-  --log-prefix "TCP pkt died (1): "
-$IPTABLES -A tcp_packets -p TCP -s 0/0 -j DROP
+$IPTABLES -A tcp_packets -j LOG --log-level debug \
+  --log-prefix "IPT TCP pkt died: "
+$IPTABLES -A tcp_packets -j DROP
 
 #
 # UDP ports
 #
-
-# DNS
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --dport 53 -j ACCEPT
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 53 -j ACCEPT
+$IPTABLES -N udp_packets
+$IPTABLES -A udp_packets -p udp --dport 53 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 53 -j ACCEPT
 # NTP
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 123 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 123 -j ACCEPT
 # Lord only knows
-#$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2074 -j ACCEPT
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4000 -j DROP
+#$IPTABLES -A udp_packets -p udp --source-port 2074 -j ACCEPT
+# Lord only knows
+$IPTABLES -A udp_packets -p udp --source-port 4000 -j LOG \
+  --log-level debug --log-prefix "IPT port 4000 UDP pkt died: "
+$IPTABLES -A udp_packets -p udp --source-port 4000 -j DROP
 # BitWise IM
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 4137 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 4137 -j ACCEPT
 # my gnunet node
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 2086 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 2086 -j ACCEPT
 # Skype
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 49511 -j ACCEPT
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 80 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 49511 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 80 -j ACCEPT
 # MDNS
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --dport 5353 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --dport 5353 -j ACCEPT
 # IPP: we'll kill it later if it's going to the wrong place
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 --source-port 631 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --source-port 631 -j ACCEPT
 # drop everything else with logging
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j LOG --log-level debug \
-  --log-prefix "UDP pkt died (2): "
-$IPTABLES -A udpincoming_packets -p UDP -s 0/0 -j DROP
+$IPTABLES -A udp_packets -p udp -j LOG --log-level debug \
+  --log-prefix "IPT UDP pkt died: "
+$IPTABLES -A udp_packets -p udp -j DROP
 
-##########################
+#
+# Always forward packets from trusted interfaces.
+#
+$IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
+$IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
+$IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
+
+#
+# Our guest WAP network setup is WEP, so "semi-trusted"; do not
+# allow it to interact with our trusted networks.
+#
+$IPTABLES -A FORWARD -i $WAP_IFACE -d $LAN_IP_RANGE -j badguest
+$IPTABLES -A FORWARD -i $WAP_IFACE -d $EOP_IP_RANGE -j badguest
+$IPTABLES -A FORWARD -i $WAP_IFACE -d $WPA_IP_RANGE -j badguest
+$IPTABLES -A FORWARD -i $WAP_IFACE -j ACCEPT
+
+#
+# Find TCP packets we want to forward.
+#
+$IPTABLES -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -p tcp -j tcp_packets
+$IPTABLES -A FORWARD -p udp -j udp_packets
+$IPTABLES -A FORWARD -p icmp -j icmp_packets
+$IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
+  --log-level debug --log-prefix "IPT FORWARD packet died: "
+
+#
+# ICMP rules. Create a separate chain for these.
+#
+$IPTABLES -N icmp_packets
+$IPTABLES -A icmp_packets -p icmp --icmp-type 8 -j ACCEPT
+$IPTABLES -A icmp_packets -p icmp --icmp-type 11 -j ACCEPT
+$IPTABLES -A icmp_packets -p icmp -j DROP
+
+#
 # PREROUTING chain.
 #
-
-$IPTABLES -t nat -P PREROUTING ACCEPT
-
 # BitWise IM
 #$IPTABLES -t nat -A PREROUTING -p udp --dport 4173 -i $INET_IFACE \
 #  -j DNAT --to 192.168.1.7
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
 #  -j DNAT --to 192.168.1.7
-
 # World of Warcraft
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DNAT --to 192.168.5.19
+
+#
+# Report and drop SSH attack packets.
+#
+$IPTABLES -N ssh_reject
+$IPTABLES -A ssh_reject -j LOG \
+  --log-level debug --log-prefix "IPT SSH reject: "
+$IPTABLES -A ssh_reject -j DROP
+
+#
+# Pick off blacklisted hosts.
+# Let's not even talk to these folks
+#
+#$IPTABLES -A INPUT -s 67.60.207.230 -j DROP
+#$IPTABLES -A INPUT -s 58.96.93.246 -j DROP
+#$IPTABLES -A INPUT -s 98.127.56.13 -j DROP
+#$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
+#$IPTABLES -A INPUT -s 208.187.212.152 -j DROP
+#$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
+#$IPTABLES -A INPUT -s 23.23.0.0/16 -j DROP
+
+#
+# Shut off port 3724 unless handled above. (Why?)
+#
 #$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DROP
 
-##########################
-# INPUT chain
 #
+# If the packet comes from a trusted network, accept it blindly.
+#
+$IPTABLES -A INPUT -i $LAN_IFACE -j ACCEPT
+$IPTABLES -A INPUT -i $EOP_IFACE -j ACCEPT
+$IPTABLES -A INPUT -i $WPA_IFACE -j ACCEPT
+$IPTABLES -A INPUT -i $LO_IFACE -j ACCEPT
 
 #
-# blacklisted hosts
-# Let's not even talk to these folks
+# The WAP interface is only partly trusted, since
+# it is WEP.
 #
-$IPTABLES -A INPUT -s 67.60.207.230 -j DROP
-$IPTABLES -A INPUT -s 58.96.93.246 -j DROP
-$IPTABLES -A INPUT -s 98.127.56.13 -j DROP
-$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
-$IPTABLES -A INPUT -s 208.187.212.152 -j DROP
-$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
-$IPTABLES -A INPUT -s 23.23.0.0/16 -j DROP
+$IPTABLES -A INPUT -i $WAP_IFACE -d $INET_IP -j ACCEPT
+[ "$INET_IP2" != "" ] &&
+  $IPTABLES -A INPUT -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
+$IPTABLES -A INPUT -i $WAP_IFACE -d $WAP_IP_RANGE -j ACCEPT
+$IPTABLES -A INPUT -i $WAP_IFACE -d 255.255.255.255 -j ACCEPT
+$IPTABLES -A INPUT -i $WAP_IFACE -d $WAP_BCAST_ADDRESS -j ACCEPT
+$IPTABLES -A INPUT -i $WAP_IFACE -d $WAP_BCAST_RANGE -j ACCEPT
+$IPTABLES -A INPUT -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
 
 #
 # Use iptables to stop ssh password guessing attacks
 # Thanks http://www.linuxmanagers.org/pipermail/linuxmanagers/2005-April/001752.html
 #
-
 $IPTABLES -A INPUT -i $INET_IFACE \
   -p tcp --dport 22 --syn -m recent --name sshattack \
   --set
 $IPTABLES -A INPUT -i $INET_IFACE \
   -p tcp --dport 22 --syn -m recent --name sshattack \
-  --rcheck --seconds 600 --hitcount 15 \
-  -j LOG --log-prefix 'SSH REJECT: '
-$IPTABLES -A INPUT -i $INET_IFACE \
-  -p tcp --dport 22 --syn -m recent --name sshattack \
-  --rcheck --seconds 600 --hitcount 15 \
-  -j DROP
+  --rcheck --seconds 600 --hitcount 15 -j ssh_reject
 
 if $INET2
 then
@@ -388,108 +382,62 @@ then
     --set
   $IPTABLES -A INPUT -i $INET_IFACE2 \
     -p tcp --dport 22 --syn -m recent --name sshattack \
-    --rcheck --seconds 600 --hitcount 15 \
-    -j LOG --log-prefix 'SSH REJECT: '
-  $IPTABLES -A INPUT -i $INET_IFACE2 \
-    -p tcp --dport 22 --syn -m recent --name sshattack \
-    --rcheck --seconds 600 --hitcount 15 \
-    -j DROP
+    --rcheck --seconds 600 --hitcount 15 -j ssh_reject
 fi
 
 #
-# Do some checks for obviously spoofed IP's 
+# Do some checks for obviously spoofed IP's, and accept
+# established connections.
 #
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
   -m limit --limit 3/minute --limit-burst 3 -j LOG \
   --log-level debug --log-prefix "IPT spoofed packet died: "
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
-
+$IPTABLES -A INPUT -d $INET_IP \
+  -m state --state ESTABLISHED,RELATED -j ACCEPT
 if $INET2
 then
   $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE \
     -m limit --limit 3/minute --limit-burst 3 -j LOG \
     --log-level debug --log-prefix "IPT spoofed packet died: "
   $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE -j DROP
+  $IPTABLES -A INPUT -d $INET_IP2 \
+    -m state --state ESTABLISHED,RELATED -j ACCEPT
 fi
-
-#
-# accept established connections
-#
-$IPTABLES -A INPUT -p ALL -d $INET_IP -m state --state ESTABLISHED,RELATED \
--j ACCEPT
-[ "$INET_IP2" != "" ] &&
-  $IPTABLES -A INPUT -p ALL -d $INET_IP2 -m state --state ESTABLISHED,RELATED \
-  -j ACCEPT
-
-#
-# Rules for special networks not part of the Internet
-#
-
-$IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $LAN_IP -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $LAN_IFACE -s $LAN_IP_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $LAN_BCAST_ADDRESS -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $BCAST_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $LAN_IFACE -d $MCAST_RANGE -j ACCEPT
-
-$IPTABLES -A INPUT -p ALL -i $EOP_IFACE -s $EOP_IP_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $EOP_IFACE -d $EOP_IP -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $EOP_IFACE -d $EOP_BCAST_ADDRESS -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $EOP_IFACE -d $BCAST_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $EOP_IFACE -d $MCAST_RANGE -j ACCEPT
-
-$IPTABLES -A INPUT -p ALL -i $WPA_IFACE -s $WPA_IP_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $WPA_IP -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $WPA_BCAST_ADDRESS -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $BCAST_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WPA_IFACE -d $MCAST_RANGE -j ACCEPT
-
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP -j ACCEPT
-[ "$INET_IP2" != "" ] &&
-  $IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WAP_IP_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $WAP_BCAST_ADDRESS -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $BCAST_RANGE -j ACCEPT
-$IPTABLES -A INPUT -p ALL -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
-
-$IPTABLES -A INPUT -p ALL -i $LO_IFACE -j ACCEPT
 
 #
 # Rules for incoming packets from the internet.
 #
-
-$IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP -j ACCEPT
-if [ "$INET_IP2" != "" ]
-then
-   $INET2 || $IPTABLES -A INPUT -p ALL -i $INET_IFACE -d $INET_IP2 -j ACCEPT
-fi
-$IPTABLES -A INPUT -p ICMP -i $INET_IFACE -j icmp_packets
-$IPTABLES -A INPUT -p TCP -i $INET_IFACE -j tcp_packets
-$IPTABLES -A INPUT -p UDP -i $INET_IFACE -j udpincoming_packets
-
+$IPTABLES -A INPUT -i $INET_IFACE -d $INET_IP -j ACCEPT
+$IPTABLES -A INPUT -p icmp -i $INET_IFACE -j icmp_packets
+$IPTABLES -A INPUT -p tcp -i $INET_IFACE -j tcp_checks
+$IPTABLES -A INPUT -i $INET_IFACE -j ACCEPT
 if $INET2
 then
-  $IPTABLES -A INPUT -p ALL -i $INET_IFACE2 -d $INET_IP2 -j ACCEPT
-  $IPTABLES -A INPUT -p ICMP -i $INET_IFACE2 -j icmp_packets
-  $IPTABLES -A INPUT -p TCP -i $INET_IFACE2 -j tcp_packets
-  $IPTABLES -A INPUT -p UDP -i $INET_IFACE2 -j udpincoming_packets
+  $IPTABLES -A INPUT -i $INET_IFACE2 -d $INET_IP2 -j ACCEPT
+  $IPTABLES -A INPUT -p icmp -i $INET_IFACE2 -j icmp_packets
+  $IPTABLES -A INPUT -p tcp -i $INET_IFACE2 -j tcp_checks
+  $IPTABLES -A INPUT -i $INET_IFACE2 -j ACCEPT
 fi
 
-# Otherwise log and take the default DROP
-$IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
---log-level debug --log-prefix "IPT INPUT packet died: "
-
-
-###############################
-# OUTPUT chain
 #
+# If we make it this far down the INPUT chain,
+# log and take the default DROP.
+#
+$IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
+  --log-level debug --log-prefix "IPT INPUT packet died: "
 
+#
 # Drop IPP packets out the external interfaces
 # because CUPS sucks and cannot.
 # http://cups.org/str.php?L3020+P0+S-2+C0+I0+E0+M1000+Q
-$IPTABLES -A OUTPUT -p UDP --dport 631 -o $INET_IFACE -j DROP
-$INET2 && $IPTABLES -A OUTPUT -p UDP --dport 631 -o $INET_IFACE2 -j DROP
+#
+$IPTABLES -A OUTPUT -p udp --dport 631 -o $INET_IFACE -j DROP
+$INET2 && $IPTABLES -A OUTPUT -p udp --dport 631 -o $INET_IFACE2 -j DROP
 
+#
 # Do not even send these folks anything
-$IPTABLES -A OUTPUT -d 206.18.148.184 -j DROP
+#
+#$IPTABLES -A OUTPUT -d 206.18.148.184 -j DROP
 
 $TC start
