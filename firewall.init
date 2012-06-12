@@ -12,23 +12,23 @@
 # Description:       firewall script hook
 ### END INIT INFO
 
-# Adapted from fwctl script
+# Adapted from fwctl script by Bart Massey
+# early in the millennium.
 
-#which=ipchains
-which=iptables
+which=/etc/firewall/firewall-iptables
 
-[ -x /etc/firewall/$which ] || exit 0;
+[ -x $which ] || exit 0;
 
 # See how we were called.
 case "$1" in
   start)
 	echo -n "Starting IP packet filters: "
-	/etc/firewall/$which start
+	$which start
 	echo "$which."
 	;;
   stop)
 	echo -n "Stopping IP packet filters: " 
-	/etc/firewall/$which stop
+	$which stop
 	echo "$which."
 	;;
   check)
@@ -40,8 +40,8 @@ case "$1" in
 	;;
   restart|force-reload)
 	echo -n  "Restarting IP packet filters: " 
-	/etc/firewall/$which stop
-	/etc/firewall/$which start
+	$which stop
+	$which start
 	echo "$which."
 	;;
   *)
