@@ -27,6 +27,9 @@
 # still needs fixing. Set all the configuration variables
 # below for now.
 #
+# File containing modules to be explicitly loaded. You
+# probably want to make this right.
+IPTABLES_MODULES="/etc/firewall/iptables-modules"
 # Structure of your internal network.
 INT_RANGE="192.168.0.0/16"
 # Names of your external interfaces. These will be autoconfigured.
@@ -34,30 +37,22 @@ INT_RANGE="192.168.0.0/16"
 # will be discovered on startup.
 INET_IFACE="ext0"
 INET_IFACE2="ext1"
-# Trusted LAN interface. Should be autoconfigured.
+# Trusted LAN interface. IP should be autoconfigured.
 LAN_IFACE="ent0"
 LAN_IP="192.168.1.1"
-LAN_IP_RANGE="192.168.1.0/24"
-LAN_BCAST_ADDRESS="192.168.1.255"
-# Semi-trusted WEP WAP interface. Should be autoconfigured.
+# Semi-trusted WEP WAP interface. IP should be autoconfigured.
 WAP_IFACE="wap1-wifi0"
 WAP_IP="192.168.3.1"
-WAP_IP_RANGE="192.168.3.0/24"
-WAP_BCAST_ADDRESS="192.168.3.255"
-WAP_BCAST_RANGE="255.0.0.0/8"
-# Trusted Ethernet-over-Power LAN interface. Should be
+# Trusted Ethernet-over-Power LAN interface. IP should be
 # autoconfigured.
 EOP_IFACE="ept0"
 EOP_IP="192.168.4.1"
-EOP_IP_RANGE="192.168.4.0/24"
-EOP_BCAST_ADDRESS="192.168.4.255"
-# Trusted WPA WAP interface. Should be autoconfigured.
+# Trusted WPA WAP interface. IP should be autoconfigured.
 WPA_IFACE="wap0-wifi0"
 WPA_IP="192.168.5.1"
-WPA_IP_RANGE="192.168.5.0/24"
-WPA_BCAST_ADDRESS="192.168.5.255"
 # Name of your local interface. You shouldn't even need to
-# set this, as it should be autoconfigured.
+# set this, as it should be autoconfigured; some UNIXes
+# call it "lo" and some "lo0", is all.
 LO_IFACE="lo"
 
 #
@@ -88,7 +83,7 @@ case "$INET_IP" in
 [0-9]*.[0-9]*.[0-9]*.[0-9]*)
   ;;
 *)
-  echo "firewall.iptables: no external interface" >&2
+  echo "$0: no external interface" >&2
   exit 1
   ;;
 esac
@@ -122,11 +117,16 @@ MCAST_RANGE="224.0.0.0/4"
 #
 # Load all required IPTables modules
 #
-/sbin/depmod -a
-while read MODULE
-do
-  /sbin/modprobe $MODULE
-done < /etc/firewall/iptables-modules
+if [ -r $IPTABLES_MODULES ]
+then
+    /sbin/depmod -a
+    while read MODULE
+    do
+	/sbin/modprobe $MODULE
+    done <$IPTABLES_MODULES
+else
+    echo "$0: warning: cannot load iptables modules from $IPTABLES_MODULES" >&2
+fi
 
 case "$1" in
 start|stop)
@@ -294,10 +294,16 @@ $IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
 # Our guest WAP network setup is WEP, so "semi-trusted"; do not
 # allow it to interact with our trusted networks.
 #
-$IPTABLES -A FORWARD -i $WAP_IFACE -d $LAN_IP_RANGE -j badguest
-$IPTABLES -A FORWARD -i $WAP_IFACE -d $EOP_IP_RANGE -j badguest
-$IPTABLES -A FORWARD -i $WAP_IFACE -d $WPA_IP_RANGE -j badguest
-$IPTABLES -A FORWARD -i $WAP_IFACE -j ACCEPT
+
+#
+# The WAP interface is only partly trusted, since
+# it is WEP.
+#
+$IPTABLES -A FORWARD -i $WAP_IFACE -d $INET_IP -j ACCEPT
+[ "$INET_IP2" != "" ] &&
+  $IPTABLES -A FORWARD -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
+$IPTABLES -A FORWARD -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
+$IPTABLES -A FORWARD -i $WAP_IFACE -j badguest
 
 #
 # Find TCP packets we want to forward.
@@ -348,25 +354,14 @@ $IPTABLES -A ssh_reject -j DROP
 #  -j DROP
 
 #
-# If the packet comes from a trusted network, accept it blindly.
+# If the packet comes from a trusted or partially-trusted
+# network, accept it blindly.
 #
 $IPTABLES -A INPUT -i $LAN_IFACE -j ACCEPT
 $IPTABLES -A INPUT -i $EOP_IFACE -j ACCEPT
+$IPTABLES -A INPUT -i $WAP_IFACE -j ACCEPT
 $IPTABLES -A INPUT -i $WPA_IFACE -j ACCEPT
 $IPTABLES -A INPUT -i $LO_IFACE -j ACCEPT
-
-#
-# The WAP interface is only partly trusted, since
-# it is WEP.
-#
-$IPTABLES -A INPUT -i $WAP_IFACE -d $INET_IP -j ACCEPT
-[ "$INET_IP2" != "" ] &&
-  $IPTABLES -A INPUT -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
-$IPTABLES -A INPUT -i $WAP_IFACE -d $WAP_IP_RANGE -j ACCEPT
-$IPTABLES -A INPUT -i $WAP_IFACE -d 255.255.255.255 -j ACCEPT
-$IPTABLES -A INPUT -i $WAP_IFACE -d $WAP_BCAST_ADDRESS -j ACCEPT
-$IPTABLES -A INPUT -i $WAP_IFACE -d $WAP_BCAST_RANGE -j ACCEPT
-$IPTABLES -A INPUT -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
 
 #
 # Use iptables to stop ssh password guessing attacks
