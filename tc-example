@@ -1,0 +1,87 @@
+#!/bin/sh
+# Copyright © 2010 Bart Massey
+# Set up traffic shaping
+# See the HTB Users Guide
+#   http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm
+# for the source of much of this.
+ENT=ent0
+EXT=ext0
+TC="tc"
+case $1 in
+start)
+	# set up root
+	$TC qdisc add dev $ENT \
+	  root handle 1 htb default 99
+	## handle entirely internal traffic involving this host
+	$TC class add dev $ENT \
+	  parent 1 classid 1:4 \
+	  htb rate 1000mbit
+	$TC qdisc add dev $ENT \
+	  parent 1:4 sfq perturb 10
+	for i in 0 1 2 3 4 5
+	do
+	    $TC filter add dev $ENT \
+	      protocol ip parent 1:4 u32 \
+	      match ip src 192.168.$i.1 flowid 1:4 \
+	      match ip dst 192.168.0.0/16 flowid 1:4
+	    $TC filter add dev $ENT \
+	      protocol ip parent 1:4 u32 \
+	      match ip src 192.168.0.0/16 flowid 1:4 \
+	      match ip dst 192.168.$i.1 flowid 1:4
+	done
+	# handle external traffic incoming through this host
+	$TC class add dev $ENT \
+	  parent 1 classid 1:5 \
+	  htb rate 750kbit
+        # set a reasonable default
+	$TC class add dev $ENT \
+	  parent 1 classid 1:99 \
+	  htb rate 750kbit
+	$TC qdisc add dev $ENT \
+	  parent 1:99 handle 99 sfq perturb 10
+	# handle local traffic outgoing through this host
+	$TC qdisc add dev $EXT \
+	  root handle 1 htb
+	$TC class add dev $EXT \
+	  parent 1 classid 1:5 \
+	  htb rate 300kbit ceil 400kbit cburst 40kb
+	EXTIP="`/local/bin/ipaddr po8.org | awk '{print $NF;}'`"
+	$TC filter add dev $EXT \
+	  protocol ip parent 1:5 u32 \
+	  match ip dst $EXTIP flowid 1:5
+	# handle remotes
+	cat <<EOF |
+	11 bartfan 1
+	12 bartserv-ent0 1
+	13 bens-pc-power 2
+        14 192.168.5.0/24 2
+	15 joanie 3
+EOF
+	while read CID HOST PRIO
+	do
+	    case $HOST in
+	    [0-9]*) IP=$HOST ;;
+	    *)      IP="`/local/bin/ipaddr $HOST | awk '{print $NF;}'`" ;;
+	    esac
+	    H=`expr $CID + 10`
+	    $TC class add dev $ENT \
+	      parent 1:5 classid 1:$CID htb rate 100mbit ceil 120mbit cburst 40kb
+	    $TC filter add dev $ENT \
+	      protocol ip parent 1:0 prio $PRIO u32 \
+	      match ip dst $IP flowid 1:$CID
+	    $TC qdisc add dev $ENT \
+	      parent 1:$CID handle $H sfq perturb 10
+	done
+	;;
+stop)
+	$TC qdisc del dev $ENT root
+	$TC qdisc del dev $EXT root
+	;;
+restart|force-reload)
+	$0 stop
+	$0 start
+	;;
+*)
+	echo "tc-script: unknown command $1" >&2
+	exit 1
+esac
