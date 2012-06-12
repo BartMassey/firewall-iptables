@@ -15,37 +15,38 @@
 # Adapted from fwctl script by Bart Massey
 # early in the millennium.
 
-which=/etc/firewall/firewall-iptables
+scriptname=firewall-iptables
+script=/etc/firewall/$scriptname
 
-[ -x $which ] || exit 0;
+[ -x $script ] || exit 0
 
 # See how we were called.
 case "$1" in
   start)
-	echo -n "Starting IP packet filters: "
-	$which start
-	echo "$which."
+	echo -n "Starting IP firewall: "
+	$script start
+	echo "$scriptname."
 	;;
   stop)
-	echo -n "Stopping IP packet filters: " 
-	$which stop
-	echo "$which."
+	echo -n "Stopping IP firewall: " 
+	$script stop
+	echo "$scriptname."
 	;;
   check)
-	$which check
+	exit 0
 	;;
   isconfigured)
 	egrep -v '^[ 	]*$|^#' >/dev/null || exit 0
 	exit 1
 	;;
   restart|force-reload)
-	echo -n  "Restarting IP packet filters: " 
-	$which stop
-	$which start
-	echo "$which."
+	echo -n  "Restarting IP firewall: " 
+	$script stop
+	$script start
+	echo "$scriptname."
 	;;
   *)
-        echo "Usage: $which {start|stop|check|restart|force-reload}"
+        echo "Usage: firewall {start|stop|check|restart|force-reload}"
         exit 1
 esac
 
