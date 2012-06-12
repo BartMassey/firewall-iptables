@@ -200,11 +200,11 @@ $IPTABLES -A badguest -j DROP
 # New not-syn packets should be dropped.
 #
 $IPTABLES -N tcp_checks
-$IPTABLES -P tcp_checks DROP
 $IPTABLES -A tcp_checks -p tcp --syn -j RETURN
 $IPTABLES -A tcp_checks -p tcp -m state --state ESTABLISHED,RELATED -j RETURN
 $IPTABLES -A tcp_checks -j LOG \
   --log-level debug --log-prefix "IPT unknown TCP non-SYN: "
+$IPTABLES -A tcp_checks -j DROP
 
 #
 # Take care of bad TCP packets that we don't want
@@ -272,6 +272,14 @@ $IPTABLES -A udp_packets -p udp -j LOG --log-level debug \
 $IPTABLES -A udp_packets -p udp -j DROP
 
 #
+# ICMP rules. Create a separate chain for these.
+#
+$IPTABLES -N icmp_packets
+$IPTABLES -A icmp_packets -p icmp --icmp-type 8 -j ACCEPT
+$IPTABLES -A icmp_packets -p icmp --icmp-type 11 -j ACCEPT
+$IPTABLES -A icmp_packets -p icmp -j DROP
+
+#
 # Always forward packets from trusted interfaces.
 #
 $IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
@@ -296,14 +304,6 @@ $IPTABLES -A FORWARD -p udp -j udp_packets
 $IPTABLES -A FORWARD -p icmp -j icmp_packets
 $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
   --log-level debug --log-prefix "IPT FORWARD packet died: "
-
-#
-# ICMP rules. Create a separate chain for these.
-#
-$IPTABLES -N icmp_packets
-$IPTABLES -A icmp_packets -p icmp --icmp-type 8 -j ACCEPT
-$IPTABLES -A icmp_packets -p icmp --icmp-type 11 -j ACCEPT
-$IPTABLES -A icmp_packets -p icmp -j DROP
 
 #
 # PREROUTING chain.
