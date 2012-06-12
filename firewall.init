@@ -1,0 +1,52 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          firewall
+# Required-Start:
+# Required-Stop:
+# Should-Start:      net-secondary
+# Should-Stop:       net-secondary
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start and stop firewall
+# Description:       firewall script hook
+### END INIT INFO
+
+# Adapted from fwctl script
+
+#which=ipchains
+which=iptables
+
+[ -x /etc/firewall/$which ] || exit 0;
+
+# See how we were called.
+case "$1" in
+  start)
+	echo -n "Starting IP packet filters: "
+	/etc/firewall/$which start
+	echo "$which."
+	;;
+  stop)
+	echo -n "Stopping IP packet filters: " 
+	/etc/firewall/$which stop
+	echo "$which."
+	;;
+  check)
+	$which check
+	;;
+  isconfigured)
+	egrep -v '^[ 	]*$|^#' >/dev/null || exit 0
+	exit 1
+	;;
+  restart|force-reload)
+	echo -n  "Restarting IP packet filters: " 
+	/etc/firewall/$which stop
+	/etc/firewall/$which start
+	echo "$which."
+	;;
+  *)
+        echo "Usage: $which {start|stop|check|restart|force-reload}"
+        exit 1
+esac
+
+exit 0
