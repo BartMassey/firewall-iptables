@@ -128,6 +128,20 @@ do
   /sbin/modprobe $MODULE
 done < /etc/firewall/iptables-modules
 
+case "$1" in
+start|stop)
+    ;;
+restart|force-reload)
+    $0 stop
+    $0 start
+    exit 0
+    ;;
+*)
+    echo "$0: do not know how to $1. exiting." >&2
+    exit 1
+    ;;
+esac
+
 #
 # disable everything
 #
@@ -141,8 +155,6 @@ $IPTABLES -t nat -X
 # If we're just stopping, do so now
 #
 case "$1" in
-start)
-    ;;
 stop)
     # Make sure all chains are default accept
     $IPTABLES -P INPUT ACCEPT
@@ -153,14 +165,6 @@ stop)
     $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
     $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
     exit 0
-    ;;
-restart|force-reload)
-    $0 stop
-    $0 start
-    ;;
-*)
-    echo "do not know how to $1.  exiting." >&2
-    exit 1
     ;;
 esac
 
