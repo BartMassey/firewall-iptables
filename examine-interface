@@ -1,0 +1,38 @@
+# Copyright (c) 2012 Bart Massey
+# This program is licensed under the GPL version 2.
+# See the file COPYING in this directory for license details.
+
+# Examine a network interface and set some variables.
+
+# This script is meant to be used like:
+#   eval "`examine-interface <prefix> <ifname>`"
+# where the first argument is the prefix of the
+# variable names that will be set, and the
+# second is the name of the network interface.
+# The output is Bourne-shell compatible: sorry
+# C-shell users.
+
+# The variables set are:
+# <prefix>: true if interface exists, false otherwise.
+# <prefix>_IP: IP address of interface.
+
+if [ "$2" != "" ]
+then 
+    TMP="/tmp/examine-interface.$$"
+    trap "rm -f $TMP" 0 1 2 3 15
+    /sbin/ifconfig "$2" >$TMP 2>/dev/null
+    case $? in
+    0)
+        IP="`grep 'inet addr' <$TMP | awk '{print $2}' | sed -e 's/.*://'`"
+        case "$IP" in
+        [0-9]*.[0-9]*.[0-9]*.[0-9]*)
+            echo "${1}=true"
+	    echo "${1}_IP=$IP"
+	    exit 0
+	    ;;
+        esac
+        ;;
+    esac
+fi
+echo "$1=false"
+exit 0
