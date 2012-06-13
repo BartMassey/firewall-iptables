@@ -25,10 +25,23 @@
 # interface names of your network interfaces.  Set all the
 # configuration variables below.
 #
+
+#
+# Where this script and its auxiliaries live. Not something
+# you would normally change.
+# 
+ETC=/etc/firewall
+
+#
 # File containing modules to be explicitly loaded. You
-# probably want to make this right.
+# probably want to use this because Linux fails to autoload
+# some crucial modules.
+#
 IPTABLES_MODULES="$ETC/iptables-modules"
+
+#
 # Structure of your internal network.
+#
 INT_RANGE="192.168.0.0/16"
 
 #
@@ -85,7 +98,7 @@ then
 else
     echo "$0: no external interface" >&2
     exit 1
-esac
+fi
 eval "`\"$ETC/examine-interface\" INET2 \"$INET2_IFACE\"`"
 eval "`\"$ETC/examine-interface\" INT \"$INT_IFACE\"`"
 eval "`\"$ETC/examine-interface\" WAP \"$WAP_IFACE\"`"
