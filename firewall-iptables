@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# rc.firewall - IP Firewall script for Linux and iptables
+# IP Firewall script for Linux and iptables
 #
 # Copyright (C) 2001  Oskar Andreasson <blueflux@koffein.net>
 # Extensively rewritten by Bart Massey <bart@cs.pdx.edu> 2001-2012.
@@ -21,38 +21,40 @@
 #
 
 #
-# To configure this, all you should need to do is set the
-# interface names of your network interfaces. The script
-# would auto-discover everything else.  Unfortunately, this
-# still needs fixing. Set all the configuration variables
-# below for now.
+# To configure this, you mostly just need to set the
+# interface names of your network interfaces.  Set all the
+# configuration variables below.
 #
 # File containing modules to be explicitly loaded. You
 # probably want to make this right.
-IPTABLES_MODULES="/etc/firewall/iptables-modules"
+IPTABLES_MODULES="$ETC/iptables-modules"
 # Structure of your internal network.
 INT_RANGE="192.168.0.0/16"
-# Names of your external interfaces. These will be autoconfigured.
-# It is harmless to give a nonexistent name for INET_IFACE2: this
-# will be discovered on startup.
+
+#
+# Names of your external interfaces. These will be
+# autoconfigured.  It is harmless to give a nonexistent name
+# for an interface: this will be discovered on startup, and
+# handled as if the interface is not present. It is also
+# harmless to comment out an interface, which will then not
+# be checked for.
+#
+
+# Primary external interface. You must have a primary interface.
 INET_IFACE="ext0"
-INET_IFACE2="ext1"
-# Trusted LAN interface. IP should be autoconfigured.
+# Note that INET2_IFACE shouldn't exist if it's just an
+# alias. Just comment it out.
+INET2_IFACE="ext1"
+# Trusted LAN interface.
 LAN_IFACE="ent0"
-LAN_IP="192.168.1.1"
-# Semi-trusted WEP WAP interface. IP should be autoconfigured.
+# Semi-trusted WEP WAP interface.
 WAP_IFACE="wap1-wifi0"
-WAP_IP="192.168.3.1"
-# Trusted Ethernet-over-Power LAN interface. IP should be
-# autoconfigured.
+# Trusted Ethernet-over-Power LAN interface.
 EOP_IFACE="ept0"
-EOP_IP="192.168.4.1"
 # Trusted WPA WAP interface. IP should be autoconfigured.
 WPA_IFACE="wap0-wifi0"
-WPA_IP="192.168.5.1"
 # Name of your local interface. You shouldn't even need to
-# set this, as it should be autoconfigured; some UNIXes
-# call it "lo" and some "lo0", is all.
+# set this; some UNIXes call it "lo" and some "lo0", is all.
 LO_IFACE="lo"
 
 #
@@ -70,44 +72,25 @@ fi
 #
 # Hook for optional traffic-shaping script.
 #
-TC="/etc/firewall/tc"
-[ -x $TC ] || TC=":"
+TC="$ETC/tc"
+[ -x "$TC" ] || TC=":"
 
 #
-# Set up the external interface. It is an error not to have one
-# of these. You may have two.
+# Look for the interfaces.
 #
-# Primary interface
-INET_IP="`/sbin/ifconfig $INET_IFACE | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
-case "$INET_IP" in
-[0-9]*.[0-9]*.[0-9]*.[0-9]*)
-  ;;
-*)
-  echo "$0: no external interface" >&2
-  exit 1
-  ;;
+eval "`\"$ETC/examine-interface\" INET \"$INET_IFACE\"`"
+if $INET
+then
+    :
+else
+    echo "$0: no external interface" >&2
+    exit 1
 esac
-# Secondary interface
-# Note that INET_IFACE2 shouldn't exist if it's just an
-# alias. The rules as stated work fine in this case if you
-# comment out INET_IFACE2 above.
-INET2=false
-if [ "$INET_IFACE2" != "" ]
-then 
-    /sbin/ifconfig "$INET_IFACE2" >/dev/null 2>&1
-    case $? in
-    0)
-        INET_IP2="`/sbin/ifconfig $INET_IFACE2 | grep 'inet addr' | awk '{print $2}' | sed -e 's/.*://'`"
-        case "$INET_IP2" in
-        [0-9]*.[0-9]*.[0-9]*.[0-9]*)  IP2=true ;;
-        *)  unset INET_IFACE2 ;;
-        esac
-        ;;
-    *)
-        unset INET_IFACE2
-        ;;
-    esac
-fi
+eval "`\"$ETC/examine-interface\" INET2 \"$INET2_IFACE\"`"
+eval "`\"$ETC/examine-interface\" INT \"$INT_IFACE\"`"
+eval "`\"$ETC/examine-interface\" WAP \"$WAP_IFACE\"`"
+eval "`\"$ETC/examine-interface\" EOP \"$EOP_IFACE\"`"
+eval "`\"$ETC/examine-interface\" WPA \"$WPA_IFACE\"`"
 
 #
 # Symbolic name for an invariant range.
@@ -163,7 +146,7 @@ stop)
     # Set up open NAT
     $IPTABLES -t nat -P PREROUTING ACCEPT
     $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
-    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
+    $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET2_IFACE -j SNAT --to-source $INET2_IP
     exit 0
     ;;
 esac
@@ -190,7 +173,7 @@ $IPTABLES -P FORWARD DROP
 # Set up open NAT
 $IPTABLES -t nat -P PREROUTING ACCEPT
 $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
-$INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE2 -j SNAT --to-source $INET_IP2
+$INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET2_IFACE -j SNAT --to-source $INET2_IP
 
 #
 # Report on guest WAP packets that try to get in
@@ -286,9 +269,9 @@ $IPTABLES -A icmp_packets -p icmp -j DROP
 #
 # Always forward packets from trusted interfaces.
 #
-$IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
-$IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
-$IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
+$LAN && $IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
+$WPA && $IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
+$EOP && $IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
 
 #
 # Our guest WAP network setup is WEP, so "semi-trusted"; do not
@@ -299,11 +282,13 @@ $IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
 # The WAP interface is only partly trusted, since
 # it is WEP.
 #
-$IPTABLES -A FORWARD -i $WAP_IFACE -d $INET_IP -j ACCEPT
-[ "$INET_IP2" != "" ] &&
-  $IPTABLES -A FORWARD -i $WAP_IFACE -d $INET_IP2 -j ACCEPT
-$IPTABLES -A FORWARD -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
-$IPTABLES -A FORWARD -i $WAP_IFACE -j badguest
+if $WAP
+then
+    $IPTABLES -A FORWARD -i $WAP_IFACE -d $INET_IP -j ACCEPT
+    $INET2 && $IPTABLES -A FORWARD -i $WAP_IFACE -d $INET2_IP -j ACCEPT
+    $IPTABLES -A FORWARD -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
+    $IPTABLES -A FORWARD -i $WAP_IFACE -j badguest
+fi
 
 #
 # Find TCP packets we want to forward.
@@ -357,10 +342,10 @@ $IPTABLES -A ssh_reject -j DROP
 # If the packet comes from a trusted or partially-trusted
 # network, accept it blindly.
 #
-$IPTABLES -A INPUT -i $LAN_IFACE -j ACCEPT
-$IPTABLES -A INPUT -i $EOP_IFACE -j ACCEPT
-$IPTABLES -A INPUT -i $WAP_IFACE -j ACCEPT
-$IPTABLES -A INPUT -i $WPA_IFACE -j ACCEPT
+$LAN && $IPTABLES -A INPUT -i $LAN_IFACE -j ACCEPT
+$EOP && $IPTABLES -A INPUT -i $EOP_IFACE -j ACCEPT
+$WAP && $IPTABLES -A INPUT -i $WAP_IFACE -j ACCEPT
+$WPA && $IPTABLES -A INPUT -i $WPA_IFACE -j ACCEPT
 $IPTABLES -A INPUT -i $LO_IFACE -j ACCEPT
 
 #
@@ -373,13 +358,12 @@ $IPTABLES -A INPUT -i $INET_IFACE \
 $IPTABLES -A INPUT -i $INET_IFACE \
   -p tcp --dport 22 --syn -m recent --name sshattack \
   --rcheck --seconds 600 --hitcount 15 -j ssh_reject
-
 if $INET2
 then
-  $IPTABLES -A INPUT -i $INET_IFACE2 \
+  $IPTABLES -A INPUT -i $INET2_IFACE \
     -p tcp --dport 22 --syn -m recent --name sshattack \
     --set
-  $IPTABLES -A INPUT -i $INET_IFACE2 \
+  $IPTABLES -A INPUT -i $INET2_IFACE \
     -p tcp --dport 22 --syn -m recent --name sshattack \
     --rcheck --seconds 600 --hitcount 15 -j ssh_reject
 fi
@@ -396,11 +380,11 @@ $IPTABLES -A INPUT -d $INET_IP \
   -m state --state ESTABLISHED,RELATED -j ACCEPT
 if $INET2
 then
-  $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE \
+  $IPTABLES -A INPUT -i $INET2_IFACE -s $INT_RANGE \
     -m limit --limit 3/minute --limit-burst 3 -j LOG \
     --log-level debug --log-prefix "IPT spoofed packet died: "
-  $IPTABLES -A INPUT -i $INET_IFACE2 -s $INT_RANGE -j DROP
-  $IPTABLES -A INPUT -d $INET_IP2 \
+  $IPTABLES -A INPUT -i $INET2_IFACE -s $INT_RANGE -j DROP
+  $IPTABLES -A INPUT -d $INET2_IP \
     -m state --state ESTABLISHED,RELATED -j ACCEPT
 fi
 
@@ -413,10 +397,10 @@ $IPTABLES -A INPUT -p tcp -i $INET_IFACE -j tcp_checks
 $IPTABLES -A INPUT -i $INET_IFACE -j ACCEPT
 if $INET2
 then
-  $IPTABLES -A INPUT -i $INET_IFACE2 -d $INET_IP2 -j ACCEPT
-  $IPTABLES -A INPUT -p icmp -i $INET_IFACE2 -j icmp_packets
-  $IPTABLES -A INPUT -p tcp -i $INET_IFACE2 -j tcp_checks
-  $IPTABLES -A INPUT -i $INET_IFACE2 -j ACCEPT
+  $IPTABLES -A INPUT -i $INET2_IFACE -d $INET2_IP -j ACCEPT
+  $IPTABLES -A INPUT -p icmp -i $INET2_IFACE -j icmp_packets
+  $IPTABLES -A INPUT -p tcp -i $INET2_IFACE -j tcp_checks
+  $IPTABLES -A INPUT -i $INET2_IFACE -j ACCEPT
 fi
 
 #
@@ -432,7 +416,7 @@ $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
 # http://cups.org/str.php?L3020+P0+S-2+C0+I0+E0+M1000+Q
 #
 $IPTABLES -A OUTPUT -p udp --dport 631 -o $INET_IFACE -j DROP
-$INET2 && $IPTABLES -A OUTPUT -p udp --dport 631 -o $INET_IFACE2 -j DROP
+$INET2 && $IPTABLES -A OUTPUT -p udp --dport 631 -o $INET2_IFACE -j DROP
 
 #
 # Do not even send these folks anything
