@@ -196,14 +196,11 @@ $IPTABLES -t nat -P PREROUTING ACCEPT
 # Ben's Minecraft
 $INETA1 && $IPTABLES -t nat -A POSTROUTING \
   -p tcp -s 192.168.4.19 --sport 25565 \
-   -o $INET_IFACE -j SNAT --to-source $INETA1_IP
+   -j SNAT --to-source $INETA1_IP
 $INETA1 && $IPTABLES -t nat -A POSTROUTING \
   -p udp -s 192.168.4.19 --sport 25565 \
-   -o $INET_IFACE -j SNAT --to-source $INETA1_IP
+   -j SNAT --to-source $INETA1_IP
 # General
-$INETA1 && $IPTABLES -t nat -A POSTROUTING \
-  -p udp -s 192.168.4.19 --sport 25565 \
-   -o $INET_IFACE -j SNAT --to-source $INETA1_IP
 $INET2 && $IPTABLES -t nat -A POSTROUTING \
   -o $INET2_IFACE -j SNAT --to-source $INET2_IP
 $IPTABLES -t nat -A POSTROUTING \
@@ -255,8 +252,10 @@ $IPTABLES -A tcp_packets -p tcp --dport 2086 -j ACCEPT
 $IPTABLES -A tcp_packets -p tcp --dport 4137 -j ACCEPT
 # bzflag
 $IPTABLES -A tcp_packets -p tcp --dport 5155 -j ACCEPT
-# my freenet node
+# freenet node
 $IPTABLES -A tcp_packets -p tcp --dport 21339 -j ACCEPT
+# Minecraft
+$IPTABLES -A tcp_packets -p tcp --dport 25565 -j ACCEPT
 # all others drop
 $IPTABLES -A tcp_packets -j LOG --log-level debug \
   --log-prefix "IPT TCP pkt died: "
@@ -287,6 +286,8 @@ $IPTABLES -A udp_packets -p udp --source-port 80 -j ACCEPT
 $IPTABLES -A udp_packets -p udp --dport 5353 -j ACCEPT
 # IPP: we'll kill it later if it's going to the wrong place
 $IPTABLES -A udp_packets -p udp --source-port 631 -j ACCEPT
+# Minecraft
+$IPTABLES -A tcp_packets -p udp --dport 25565 -j ACCEPT
 # drop everything else with logging
 $IPTABLES -A udp_packets -p udp -j LOG --log-level debug \
   --log-prefix "IPT UDP pkt died: "
@@ -346,9 +347,19 @@ $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DNAT --to 192.168.5.19
 # Ben's Minecraft
-$INETA1 && $IPTABLES -t nat -A PREROUTING -p tcp \
+if $INETA1
+then
+    $IPTABLES -t nat -A PREROUTING -p tcp \
       -d $INETA1_IP --dport 25565 \
       -j DNAT --to 192.168.4.19
+    $IPTABLES -t nat -A PREROUTING -p udp \
+      -d $INETA1_IP --dport 25565 \
+      -j DNAT --to 192.168.4.19
+fi
+# bartfan SSH
+$INETA1 && $IPTABLES -t nat -A PREROUTING -p tcp \
+      -d $INETA1_IP --dport 22 \
+      -j DNAT --to 192.168.1.7
 
 #
 # Report and drop SSH attack packets.
@@ -359,9 +370,10 @@ $IPTABLES -A ssh_reject -j LOG \
 $IPTABLES -A ssh_reject -j DROP
 
 #
+# INPUT chain
+#
 # Pick off blacklisted hosts.
 # Let's not even talk to these folks
-#
 #$IPTABLES -A INPUT -s 67.60.207.230 -j DROP
 #$IPTABLES -A INPUT -s 58.96.93.246 -j DROP
 #$IPTABLES -A INPUT -s 98.127.56.13 -j DROP
@@ -369,27 +381,25 @@ $IPTABLES -A ssh_reject -j DROP
 #$IPTABLES -A INPUT -s 208.187.212.152 -j DROP
 #$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
 #$IPTABLES -A INPUT -s 23.23.0.0/16 -j DROP
-
-#
 # Shut off port 3724 unless handled above. (Why?)
-#
-#$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE \
-#  -j DROP
-
-#
+#$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE -j DROP
+# Drop packets intended for the IP alias at this point,
+# since they should have already been DNATted.
+if $INETA1
+then
+    $IPTABLES -A INPUT -d $INETA1_IP -j LOG \
+      --log-level debug --log-prefix "IPT missed hole: "
+    $IPTABLES -A INPUT -d $INETA1_IP -j DROP
+fi
 # If the packet comes from a trusted or partially-trusted
 # network, accept it blindly.
-#
 $LAN && $IPTABLES -A INPUT -i $LAN_IFACE -j ACCEPT
 $EOP && $IPTABLES -A INPUT -i $EOP_IFACE -j ACCEPT
 $WAP && $IPTABLES -A INPUT -i $WAP_IFACE -j ACCEPT
 $WPA && $IPTABLES -A INPUT -i $WPA_IFACE -j ACCEPT
 $IPTABLES -A INPUT -i $LO_IFACE -j ACCEPT
-
-#
 # Use iptables to stop ssh password guessing attacks
 # Thanks http://www.linuxmanagers.org/pipermail/linuxmanagers/2005-April/001752.html
-#
 $IPTABLES -A INPUT -i $INET_IFACE \
   -p tcp --dport 22 --syn -m recent --name sshattack \
   --set
@@ -405,11 +415,8 @@ then
     -p tcp --dport 22 --syn -m recent --name sshattack \
     --rcheck --seconds 600 --hitcount 15 -j ssh_reject
 fi
-
-#
 # Do some checks for obviously spoofed IP's, and accept
 # established connections.
-#
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
   -m limit --limit 3/minute --limit-burst 3 -j LOG \
   --log-level debug --log-prefix "IPT spoofed packet died: "
@@ -425,10 +432,7 @@ then
   $IPTABLES -A INPUT -d $INET2_IP \
     -m state --state ESTABLISHED,RELATED -j ACCEPT
 fi
-
-#
 # Rules for incoming packets from the internet.
-#
 $IPTABLES -A INPUT -i $INET_IFACE -d $INET_IP -j ACCEPT
 $IPTABLES -A INPUT -p icmp -i $INET_IFACE -j icmp_packets
 $IPTABLES -A INPUT -p tcp -i $INET_IFACE -j tcp_checks
@@ -441,10 +445,8 @@ then
   $IPTABLES -A INPUT -i $INET2_IFACE -j ACCEPT
 fi
 
-#
 # If we make it this far down the INPUT chain,
 # log and take the default DROP.
-#
 $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
   --log-level debug --log-prefix "IPT INPUT packet died: "
 
