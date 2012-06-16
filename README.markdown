@@ -46,18 +46,22 @@ My setup is:
 
 My intended policy is this:
 
-* My firewall box should be able to send and receive any
-  packets from anywhere. It is a trusted box.
+* My firewall/server box should be able to send and receive
+  any packets from anywhere. It is a trusted host. It should
+  be able to provide services on any port.
 
-* The trusted networks should be able to send packets
-  anywhere they want. They should be able to receive
-  packets from the Internet only from trusted sources
-  and/or ports.
+* Hosts on the trusted networks should be able to send
+  packets anywhere they want. They should be able to receive
+  packets from the Internet only from trusted sources and/or
+  ports. They should not be able to provide services on any
+  port unless specific exception is made.
 
-* The semi-trusted network should be able to send packets to
-  the Internet, but not to any of the trusted networks.
-  It should be able to receive packets from the Internet
-  only from trusted sources and/or ports.
+* Hosts on the semi-trusted network should be able to send
+  packets to the Internet, but not to any of the trusted
+  networks.  They should be able to receive packets from the
+  Internet only from trusted sources and/or ports. They
+  should not be able to provide services on any port unless
+  specific exception is made.
   
 ## Installation
 
@@ -68,4 +72,4 @@ your system RC files as appropriate to get the firewall scripts
 run at boot. Enjoy your new firewall.
 
 *Bart Massey &lt;bart@cs.pdx.edu&gt;*  
-*2012-06-12*
+*2012-06-15*
