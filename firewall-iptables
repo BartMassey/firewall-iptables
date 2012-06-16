@@ -55,8 +55,12 @@ INT_RANGE="192.168.0.0/16"
 
 # Primary external interface. You must have a primary interface.
 INET_IFACE="ext0"
-# Note that INET2_IFACE shouldn't exist if it's just an
-# alias. Just comment it out.
+# IP alias on primary external interface. You may choose to
+# comment interfaces other than the primary external out; if
+# not, this script will autodetect whether they are present.
+INETA1_IFACE="ext0:0"
+# Note that this is a second physical interface, not an IP alias
+# on the first interface.
 INET2_IFACE="ext1"
 # Trusted LAN interface.
 LAN_IFACE="ent0"
@@ -99,6 +103,7 @@ else
     echo "$0: no external interface" >&2
     exit 1
 fi
+eval "`\"$ETC/examine-interface\" INETA1 \"$INETA1_IFACE\"`"
 eval "`\"$ETC/examine-interface\" INET2 \"$INET2_IFACE\"`"
 eval "`\"$ETC/examine-interface\" INT \"$INT_IFACE\"`"
 eval "`\"$ETC/examine-interface\" WAP \"$WAP_IFACE\"`"
@@ -183,10 +188,26 @@ echo "1" > /proc/sys/net/ipv4/ip_forward
 $IPTABLES -P INPUT DROP
 $IPTABLES -P OUTPUT ACCEPT
 $IPTABLES -P FORWARD DROP
-# Set up open NAT
 $IPTABLES -t nat -P PREROUTING ACCEPT
-$IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
-$INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET2_IFACE -j SNAT --to-source $INET2_IP
+
+#
+# POSTROUTING chain
+#
+# Ben's Minecraft
+$INETA1 && $IPTABLES -t nat -A POSTROUTING \
+  -p tcp -s 192.168.4.19 --sport 25565 \
+   -o $INET_IFACE -j SNAT --to-source $INETA1_IP
+$INETA1 && $IPTABLES -t nat -A POSTROUTING \
+  -p udp -s 192.168.4.19 --sport 25565 \
+   -o $INET_IFACE -j SNAT --to-source $INETA1_IP
+# General
+$INETA1 && $IPTABLES -t nat -A POSTROUTING \
+  -p udp -s 192.168.4.19 --sport 25565 \
+   -o $INET_IFACE -j SNAT --to-source $INETA1_IP
+$INET2 && $IPTABLES -t nat -A POSTROUTING \
+  -o $INET2_IFACE -j SNAT --to-source $INET2_IP
+$IPTABLES -t nat -A POSTROUTING \
+  -o $INET_IFACE -j SNAT --to-source $INET_IP
 
 #
 # Report on guest WAP packets that try to get in
@@ -324,6 +345,10 @@ $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 # World of Warcraft
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DNAT --to 192.168.5.19
+# Ben's Minecraft
+$INETA1 && $IPTABLES -t nat -A PREROUTING -p tcp \
+      -d $INETA1_IP --dport 25565 \
+      -j DNAT --to 192.168.4.19
 
 #
 # Report and drop SSH attack packets.
