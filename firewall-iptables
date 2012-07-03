@@ -75,7 +75,7 @@ LAN_IFACE="ent0"
 WAP_IFACE="wap1-wifi0"
 # Trusted Ethernet-over-Power LAN interface.
 EOP_IFACE="ept0"
-# Trusted WPA WAP interface. IP should be autoconfigured.
+# Trusted WPA WAP interface.
 WPA_IFACE="wap0-wifi0"
 # Name of your local interface. You shouldn't even need to
 # set this; some UNIXes call it "lo" and some "lo0", is all.
@@ -324,6 +324,13 @@ $IPTABLES -N icmp_packets
 $IPTABLES -A icmp_packets -p icmp --icmp-type 8 -j ACCEPT
 $IPTABLES -A icmp_packets -p icmp --icmp-type 11 -j ACCEPT
 $IPTABLES -A icmp_packets -p icmp -j DROP
+
+#
+# Always forward packets from the external IP.
+#
+$IPTABLES -A FORWARD -s INET_IP -j ACCEPT
+$INETA1 && $IPTABLES -A FORWARD -s INETA1_IP -j ACCEPT
+$INET2 && $IPTABLES -A FORWARD -s INETA1_IP -j ACCEPT
 
 #
 # Always forward packets from trusted interfaces.
