@@ -328,9 +328,9 @@ $IPTABLES -A icmp_packets -p icmp -j DROP
 #
 # Always forward packets from the external IP.
 #
-$IPTABLES -A FORWARD -s INET_IP -j ACCEPT
-$INETA1 && $IPTABLES -A FORWARD -s INETA1_IP -j ACCEPT
-$INET2 && $IPTABLES -A FORWARD -s INETA1_IP -j ACCEPT
+$IPTABLES -A FORWARD -s $INET_IP -j ACCEPT
+$INETA1 && $IPTABLES -A FORWARD -s $INETA1_IP -j ACCEPT
+$INET2 && $IPTABLES -A FORWARD -s $INETA1_IP -j ACCEPT
 
 #
 # Always forward packets from trusted interfaces.
