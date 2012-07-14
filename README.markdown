@@ -4,7 +4,7 @@ Extensively rewritten by Bart Massey &lt;bart@cs.pdx.edu&gt; 2001-2012.
 
 This collection of shell scripts uses iptables on a Debian
 Linux box to set up an IP firewall. Specifically, it sets up
-*my* firewall. While it may be helpful in setting up *you*
+*my* firewall. While it may be helpful in setting up *your*
 firewall, you should be aware that:
 
 * I have no idea whether this thing does what it is supposed to.
@@ -71,5 +71,14 @@ Makefile as needed, then run "make install" as root. Configure
 your system RC files as appropriate to get the firewall scripts
 run at boot. Enjoy your new firewall.
 
+The firewall-iptables script auto-configures itself based on
+the available interfaces it finds when it runs. You need to
+be very careful to put any dependencies in the init script
+that you need to make sure all the interfaces are up for
+firewall-iptables to find. Otherwise you will get mysterious
+behavior. For example, I have my script that does magic to
+bring up my wireless connection as a dependency of
+firewall.init .
+
 *Bart Massey &lt;bart@cs.pdx.edu&gt;*  
-*2012-06-15*
+*2012-07-13*

@@ -4,8 +4,8 @@
 # Provides:          firewall
 # Required-Start:
 # Required-Stop:
-# Should-Start:      net-secondary
-# Should-Stop:       net-secondary
+# Should-Start:      $network $syslog net-secondary
+# Should-Stop:       $network $syslog net-secondary
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Start and stop firewall
