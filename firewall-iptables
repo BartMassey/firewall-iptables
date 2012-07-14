@@ -311,7 +311,7 @@ $IPTABLES -A udp_packets -p udp --dport 5353 -j ACCEPT
 # IPP: we'll kill it later if it's going to the wrong place
 $IPTABLES -A udp_packets -p udp --source-port 631 -j ACCEPT
 # Minecraft
-$IPTABLES -A tcp_packets -p udp --dport 25565 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --dport 25565 -j ACCEPT
 # drop everything else with logging
 $IPTABLES -A udp_packets -p udp -j LOG --log-level debug \
   --log-prefix "IPT UDP pkt died: "
