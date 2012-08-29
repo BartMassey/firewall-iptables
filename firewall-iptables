@@ -69,14 +69,10 @@ INETA1_IFACE="ext0:0"
 # Note that this is a second physical interface, not an IP alias
 # on the first interface.
 INET2_IFACE="ext1"
-# Trusted LAN interface.
-LAN_IFACE="ent0"
+# Trusted interfaces. Set to empty string if none.
+TRUSTED_IFACE="ent0 ent1 wap0-wifi0 ept0"
 # Semi-trusted WEP WAP interface.
 WAP_IFACE="wap1-wifi0"
-# Trusted Ethernet-over-Power LAN interface.
-EOP_IFACE="ept0"
-# Trusted WPA WAP interface.
-WPA_IFACE="wap0-wifi0"
 # Name of your local interface. You shouldn't even need to
 # set this; some UNIXes call it "lo" and some "lo0", is all.
 LO_IFACE="lo"
@@ -111,10 +107,12 @@ else
 fi
 eval "`\"$ETC/examine-interface\" INETA1 \"$INETA1_IFACE\"`"
 eval "`\"$ETC/examine-interface\" INET2 \"$INET2_IFACE\"`"
-eval "`\"$ETC/examine-interface\" INT \"$INT_IFACE\"`"
 eval "`\"$ETC/examine-interface\" WAP \"$WAP_IFACE\"`"
-eval "`\"$ETC/examine-interface\" EOP \"$EOP_IFACE\"`"
-eval "`\"$ETC/examine-interface\" WPA \"$WPA_IFACE\"`"
+
+for i in $TRUSTED_IFACE
+do
+    eval "`\"$ETC/examine-interface\" TRUSTED $i`"
+done
 
 #
 # Symbolic name for an invariant range.
@@ -335,9 +333,10 @@ $INET2 && $IPTABLES -A FORWARD -s $INETA1_IP -j ACCEPT
 #
 # Always forward packets from trusted interfaces.
 #
-$LAN && $IPTABLES -A FORWARD -i $LAN_IFACE -j ACCEPT
-$WPA && $IPTABLES -A FORWARD -i $WPA_IFACE -j ACCEPT
-$EOP && $IPTABLES -A FORWARD -i $EOP_IFACE -j ACCEPT
+for i in $TRUSTED_IFACE
+do
+    $IPTABLES -A FORWARD -i $i -j ACCEPT
+done
 
 #
 # Our guest WAP network setup is WEP, so "semi-trusted"; do not
@@ -434,10 +433,11 @@ then
 fi
 # If the packet comes from a trusted or partially-trusted
 # network, accept it blindly.
-$LAN && $IPTABLES -A INPUT -i $LAN_IFACE -j ACCEPT
-$EOP && $IPTABLES -A INPUT -i $EOP_IFACE -j ACCEPT
+for i in $TRUSTED_IFACE
+do
+    $IPTABLES -A INPUT -i $i -j ACCEPT
+done
 $WAP && $IPTABLES -A INPUT -i $WAP_IFACE -j ACCEPT
-$WPA && $IPTABLES -A INPUT -i $WPA_IFACE -j ACCEPT
 $IPTABLES -A INPUT -i $LO_IFACE -j ACCEPT
 # Use iptables to stop ssh password guessing attacks
 # Thanks http://www.linuxmanagers.org/pipermail/linuxmanagers/2005-April/001752.html
