@@ -218,10 +218,10 @@ $IP6TABLES -A FORWARD -j LOG \
 if $INETA1
 then
     $IPTABLES -t nat -A POSTROUTING \
-      -p tcp -s 192.168.4.19 --sport 25565 \
+      -p tcp -s 192.168.1.27 --sport 25565 \
       -o $INET_IFACE -j SNAT --to-source $INETA1_IP
     $IPTABLES -t nat -A POSTROUTING \
-      -p udp -s 192.168.4.19 --sport 25565 \
+      -p udp -s 192.168.1.27 --sport 25565 \
       -o $INET_IFACE -j SNAT --to-source $INETA1_IP
 fi
 # General
@@ -377,22 +377,25 @@ $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 # World of Warcraft
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DNAT --to 192.168.5.19
-# Well-known Bob's Minecraft Server
-$IPTABLES -t nat -A PREROUTING -p tcp \
-   -d $INET_IP --dport 25565 \
-   -i $INET_IFACE -j DNAT --to 192.168.1.27
-$IPTABLES -t nat -A PREROUTING -p udp \
-   -d $INET_IP --dport 25565 \
-   -i $INET_IFACE -j DNAT --to 192.168.1.27
+# Well-known Bob's Minecraft Server tunnel
+if [ -f /etc/minecraft-server-ip ]
+then
+    $IPTABLES -t nat -A PREROUTING -p tcp \
+       -d $INET_IP --dport 25565 \
+       -i $INET_IFACE -j DNAT --to `cat /etc/minecraft-server-ip`
+    $IPTABLES -t nat -A PREROUTING -p udp \
+       -d $INET_IP --dport 25565 \
+       -i $INET_IFACE -j DNAT --to `cat /etc/minecraft-server-ip`
+fi
 # Ben's Minecraft
 if $INETA1
 then
     $IPTABLES -t nat -A PREROUTING -p tcp \
       -d $INETA1_IP --dport 25565 \
-      -i $INET_IFACE -j DNAT --to 192.168.4.19
+      -i $INET_IFACE -j DNAT --to 192.168.1.27
     $IPTABLES -t nat -A PREROUTING -p udp \
       -d $INETA1_IP --dport 25565 \
-      -i $INET_IFACE -j DNAT --to 192.168.4.19
+      -i $INET_IFACE -j DNAT --to 192.168.1.27
 fi
 # bartfan SSH
 $INETA1 && $IPTABLES -t nat -A PREROUTING -p tcp \
