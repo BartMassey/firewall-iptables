@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright (c) 2012 Bart Massey
 # This program is licensed under the GPL version 2.
 # See the file COPYING in this directory for license details.
@@ -26,10 +27,17 @@ then
         IP="`grep 'inet addr' <$TMP | awk '{print $2}' | sed -e 's/.*://'`"
         case "$IP" in
         [0-9]*.[0-9]*.[0-9]*.[0-9]*)
-            echo "${1}=true"
-	    echo "${1}_IP=$IP"
+            echo "$1=true; export $1"
+	    XIP="${1}_IP"
+	    XIPC="${!XIP}"
+	    case "$XIPC" in
+	    "") echo "$XIP=$IP; export $XIP" ;;
+	    *)  echo "$XIP=\"$XIPC $IP\"; export $XIP" ;;
+	    esac
 	    exit 0
 	    ;;
+	*)
+	    echo "$1=false"
         esac
         ;;
     esac
