@@ -377,6 +377,13 @@ $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 # World of Warcraft
 #$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
 #  -j DNAT --to 192.168.5.19
+# Well-known Bob's Minecraft Server
+$IPTABLES -t nat -A PREROUTING -p tcp \
+   -d $INET_IP --dport 25565 \
+   -i $INET_IFACE -j DNAT --to 192.168.1.27
+$IPTABLES -t nat -A PREROUTING -p udp \
+   -d $INET_IP --dport 25565 \
+   -i $INET_IFACE -j DNAT --to 192.168.1.27
 # Ben's Minecraft
 if $INETA1
 then
