@@ -3,7 +3,7 @@
 # IP Firewall script for Linux and iptables
 #
 # Copyright (C) 2001  Oskar Andreasson <blueflux@koffein.net>
-# Extensively rewritten by Bart Massey <bart@cs.pdx.edu> 2001-2012.
+# Extensively rewritten by Bart Massey <bart@cs.pdx.edu> 2001-.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -62,17 +62,22 @@ INT_RANGE="192.168.0.0/16"
 
 # Primary external interface. You must have a primary interface.
 INET_IFACE="ext0"
-# IP alias on primary external interface. You may choose to
+# External interface, or IP alias
+# on the first interface. You may choose to
+# comment interfaces other than the primary external out; if
+# not, this script will autodetect whether they are present.
+INET2_IFACE="ext0:1"
+# NAT interface, necessarily an IP alias. You may choose to
 # comment interfaces other than the primary external out; if
 # not, this script will autodetect whether they are present.
 INETA1_IFACE="ext0:0"
-# Note that this is a second physical interface, not an IP alias
-# on the first interface.
-INET2_IFACE="ext1"
+# NAT interface, necessarily an IP alias. You may choose to
+# comment interfaces other than the primary external out; if
+# not, this script will autodetect whether they are present.
+INETA2_IFACE="ext0:2"
 # Trusted interfaces. Set to empty string if none.
-TRUSTED_IFACE="ent0 ent1 wap0-wifi0 ept0"
-# Semi-trusted WEP WAP interface.
-WAP_IFACE="wap1-wifi0"
+#TRUSTED_IFACE="ent0 ent1 ept0 br0 exx0"
+TRUSTED_IFACE="ent0"
 # Name of your local interface. You shouldn't even need to
 # set this; some UNIXes call it "lo" and some "lo0", is all.
 LO_IFACE="lo"
@@ -89,10 +94,11 @@ else
 fi
 
 #
-# Hook for optional traffic-shaping script.
+# Hook for optional traffic-shaping / smart queue management script.
 #
-TC="$ETC/tc"
-[ -x "$TC" ] || TC=":"
+#TC="$ETC/sqm"
+#[ -x "$TC" ] || TC=":"
+TC=":"
 
 #
 # Look for the interfaces.
@@ -106,8 +112,8 @@ else
     exit 1
 fi
 eval "`\"$ETC/examine-interface\" INETA1 \"$INETA1_IFACE\"`"
+eval "`\"$ETC/examine-interface\" INETA2 \"$INETA2_IFACE\"`"
 eval "`\"$ETC/examine-interface\" INET2 \"$INET2_IFACE\"`"
-eval "`\"$ETC/examine-interface\" WAP \"$WAP_IFACE\"`"
 
 for i in $TRUSTED_IFACE
 do
@@ -124,7 +130,6 @@ MCAST_RANGE="224.0.0.0/4"
 #
 if [ -r $IPTABLES_MODULES ]
 then
-    /sbin/depmod -a
     while read MODULE
     do
 	/sbin/modprobe $MODULE
@@ -164,36 +169,37 @@ case "$1" in
 stop)
     # Make sure all chains are default accept
     $IPTABLES -P INPUT ACCEPT
-    $INETA1 && $IPTABLES -A INPUT -d $INETA1_IP -j DROP
     $IPTABLES -P OUTPUT ACCEPT
     $IPTABLES -P FORWARD ACCEPT
+    $INETA1 && $IPTABLES -A INPUT -d $INETA1_IP -j DROP
     $INETA1 && $IPTABLES -A FORWARD -d $INETA1_IP -j DROP
+    $INETA2 && $IPTABLES -A INPUT -d $INETA2_IP -j DROP
+    $INETA2 && $IPTABLES -A FORWARD -d $INETA2_IP -j DROP
+    $INET2 && $IPTABLES -A INPUT -d $INET2_IP -j DROP
+    $INET2 && $IPTABLES -A FORWARD -d $INET2_IP -j DROP
     # Accept IPv6 traffic, but do not forward it
     $IP6TABLES -P INPUT ACCEPT
     $IP6TABLES -P OUTPUT ACCEPT
     $IP6TABLES -P FORWARD DROP
     $IP6TABLES -A FORWARD -j LOG \
-      --log-level debug --log-prefix "IPT IPV6 FWD drop: "
-    # Set up open NAT
+      --log-level debug --log-prefix "IPT IPV6 STOP FWD drop: "
+    # Set up outgoing NAT only.
+    $IPTABLES -t nat -P OUTPUT ACCEPT
     $IPTABLES -t nat -P PREROUTING ACCEPT
-    $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
     $INET2 && $IPTABLES -t nat -A POSTROUTING -o $INET2_IFACE -j SNAT --to-source $INET2_IP
+    $INETA1 && $IPTABLES -t nat -A POSTROUTING -o $INETA1_IFACE -j SNAT --to-source $INETA1_IP
+    $INETA2 && $IPTABLES -t nat -A POSTROUTING -o $INETA2_IFACE -j SNAT --to-source $INETA2_IP
+    $IPTABLES -t nat -A POSTROUTING -o $INET_IFACE -j SNAT --to-source $INET_IP
     exit 0
     ;;
 esac
 
 #
 # Enable ip_forward, this is critical since it is turned off
-# by default in Linux.
+# by default in Linux. You can and should also set this in
+# /etc/sysctl.d/ somewhere.
 #
 echo "1" > /proc/sys/net/ipv4/ip_forward
-
-#
-# This would supposedly enable dynamic IP users. However,
-# this script probably doesn't work for this case anymore,
-# so commented out for now.
-#
-#echo "1" > /proc/sys/net/ipv4/ip_dynaddr
 
 #
 # Set default policies for the built-in chains
@@ -202,6 +208,7 @@ $IPTABLES -P INPUT DROP
 $IPTABLES -P OUTPUT ACCEPT
 $IPTABLES -P FORWARD DROP
 $IPTABLES -t nat -P PREROUTING ACCEPT
+$IPTABLES -t nat -P OUTPUT ACCEPT
 # Accept IPv6 traffic, but do not forward it
 $IP6TABLES -P INPUT ACCEPT
 $IP6TABLES -P OUTPUT ACCEPT
@@ -210,31 +217,45 @@ $IP6TABLES -A FORWARD -j LOG \
   --log-level debug --log-prefix "IPT IPV6 FWD drop: "
 
 #
-# POSTROUTING chain
+# NAT PREROUTING chain.
 #
-# Ben's Minecraft
-if $INETA1
-then
-    $IPTABLES -t nat -A POSTROUTING \
-      -p tcp -s 192.168.1.27 --sport 25565 \
-      -o $INET_IFACE -j SNAT --to-source $INETA1_IP
-    $IPTABLES -t nat -A POSTROUTING \
-      -p udp -s 192.168.1.27 --sport 25565 \
-      -o $INET_IFACE -j SNAT --to-source $INETA1_IP
-fi
-# General
-$INET2 && $IPTABLES -t nat -A POSTROUTING \
-  -o $INET2_IFACE -j SNAT --to-source $INET2_IP
-$IPTABLES -t nat -A POSTROUTING \
-  -o $INET_IFACE -j SNAT --to-source $INET_IP
+# bartfan all
+$INETA1 && $IPTABLES -t nat -A PREROUTING \
+      -i $INET_IFACE -d $INETA1_IP -j DNAT --to 192.168.1.7
+# bartx all
+$INETA2 && $IPTABLES -t nat -A PREROUTING \
+      -i $INET_IFACE -d $INETA2_IP -j DNAT --to 192.168.1.50
+# benserv all
+$INET2 && $IPTABLES -t nat -A PREROUTING \
+      -i $INET_IFACE -d $INET2_IP -j DNAT --to 192.168.1.47
 
 #
-# Report on guest WAP packets that try to get in
+# NAT OUTPUT chain.
 #
-$IPTABLES -N badguest
-$IPTABLES -A badguest -m limit --limit 3/minute --limit-burst 3 -j LOG \
-  --log-level debug --log-prefix "IPT bad guest packet died: "
-$IPTABLES -A badguest -j DROP
+# bartfan all
+$INETA1 && $IPTABLES -t nat -A OUTPUT \
+      -d $INETA1_IP -j DNAT --to 192.168.1.7
+# bartx all
+$INETA2 && $IPTABLES -t nat -A OUTPUT \
+      -d $INETA2_IP -j DNAT --to 192.168.1.50
+# benserv all
+$INET2 && $IPTABLES -t nat -A OUTPUT \
+      -d $INET2_IP -j DNAT --to 192.168.1.47
+
+#
+# NAT POSTROUTING chain
+#
+# External interface.
+# Special hosts get their own IP.
+$INETA1 && $IPTABLES -t nat -A POSTROUTING \
+  -s 192.168.1.7 -o $INET_IFACE -j SNAT --to-source $INETA1_IP
+$INETA2 && $IPTABLES -t nat -A POSTROUTING \
+  -s 192.168.1.50 -o $INET_IFACE -j SNAT --to-source $INETA2_IP
+$INET2 && $IPTABLES -t nat -A POSTROUTING \
+  -s 192.168.1.47 -o $INET_IFACE -j SNAT --to-source $INET2_IP
+# All others get the default IP.
+$IPTABLES -t nat -A POSTROUTING \
+  -o $INET_IFACE -j SNAT --to-source $INET_IP
 
 #
 # New not-syn packets should be dropped.
@@ -242,8 +263,8 @@ $IPTABLES -A badguest -j DROP
 $IPTABLES -N tcp_checks
 $IPTABLES -A tcp_checks -p tcp --syn -j RETURN
 $IPTABLES -A tcp_checks -p tcp -m state --state ESTABLISHED,RELATED -j RETURN
-$IPTABLES -A tcp_checks -j LOG \
-  --log-level debug --log-prefix "IPT unknown TCP non-SYN: "
+#$IPTABLES -A tcp_checks -j LOG \
+#  --log-level debug --log-prefix "IPT unknown TCP non-SYN: "
 $IPTABLES -A tcp_checks -j DROP
 
 #
@@ -252,6 +273,8 @@ $IPTABLES -A tcp_checks -j DROP
 $IPTABLES -N tcp_packets
 # Do checks
 $IPTABLES -A tcp_packets -p tcp -j tcp_checks
+# echo
+$IPTABLES -A tcp_packets -p tcp --dport 7 -j ACCEPT
 # ftp
 $IPTABLES -A tcp_packets -p tcp --dport 21 -j ACCEPT
 # ssh
@@ -266,6 +289,8 @@ $IPTABLES -A tcp_packets -p tcp --dport 80 -j ACCEPT
 $IPTABLES -A tcp_packets -p tcp --dport 113 -j ACCEPT
 # https
 $IPTABLES -A tcp_packets -p tcp --dport 443 -j ACCEPT
+# ipp
+$IPTABLES -A tcp_packets -p tcp --dport 631 -j ACCEPT
 # h323/h225 host call
 $IPTABLES -A tcp_packets -p tcp --dport 1720 -j ACCEPT
 # my gnunet node
@@ -274,12 +299,23 @@ $IPTABLES -A tcp_packets -p tcp --dport 2086 -j ACCEPT
 $IPTABLES -A tcp_packets -p tcp --dport 4137 -j ACCEPT
 # bzflag
 $IPTABLES -A tcp_packets -p tcp --dport 5155 -j ACCEPT
+# TauNet
+$IPTABLES -A tcp_packets -p tcp --dport 6283 -j ACCEPT
+# DAPHNE
+$IPTABLES -A tcp_packets -p tcp --dport 6881 -j ACCEPT
+# Terraria
+$IPTABLES -A tcp_packets -p tcp --dport 7777 -j ACCEPT
+# NBD
+$IPTABLES -A tcp_packets -p tcp --dport 10809 -j ACCEPT
 # freenet node
 $IPTABLES -A tcp_packets -p tcp --dport 21339 -j ACCEPT
 # Minecraft
 $IPTABLES -A tcp_packets -p tcp --dport 25565 -j ACCEPT
-# all others drop
-$IPTABLES -A tcp_packets -j LOG --log-level debug \
+$IPTABLES -A tcp_packets -p tcp --dport 25566 -j ACCEPT
+# GlassPlateGame
+$IPTABLES -A tcp_packets -p tcp --dport 27000 -j ACCEPT
+$IPTABLES -A tcp_packets -p tcp --dport 27001 -j ACCEPT
+$IPTABLES -A tcp_packets ! -i $INET_IFACE -j LOG --log-level debug \
   --log-prefix "IPT TCP pkt died: "
 $IPTABLES -A tcp_packets -j DROP
 
@@ -289,29 +325,25 @@ $IPTABLES -A tcp_packets -j DROP
 $IPTABLES -N udp_packets
 $IPTABLES -A udp_packets -p udp --dport 53 -j ACCEPT
 $IPTABLES -A udp_packets -p udp --source-port 53 -j ACCEPT
+# IPP: we'll kill it later if it's going to the wrong place
+$IPTABLES -A udp_packets -p udp --source-port 631 -j ACCEPT
 # NTP
 $IPTABLES -A udp_packets -p udp --source-port 123 -j ACCEPT
-# Lord only knows
-#$IPTABLES -A udp_packets -p udp --source-port 2074 -j ACCEPT
-# Lord only knows
-$IPTABLES -A udp_packets -p udp --source-port 4000 -j LOG \
-  --log-level debug --log-prefix "IPT port 4000 UDP pkt died: "
-$IPTABLES -A udp_packets -p udp --source-port 4000 -j DROP
 # BitWise IM
 $IPTABLES -A udp_packets -p udp --source-port 4137 -j ACCEPT
 # my gnunet node
 $IPTABLES -A udp_packets -p udp --source-port 2086 -j ACCEPT
 # Skype
 $IPTABLES -A udp_packets -p udp --source-port 49511 -j ACCEPT
-$IPTABLES -A udp_packets -p udp --source-port 80 -j ACCEPT
 # MDNS
 $IPTABLES -A udp_packets -p udp --dport 5353 -j ACCEPT
-# IPP: we'll kill it later if it's going to the wrong place
-$IPTABLES -A udp_packets -p udp --source-port 631 -j ACCEPT
+# Terraria
+$IPTABLES -A udp_packets -p udp --dport 7777 -j ACCEPT
 # Minecraft
 $IPTABLES -A udp_packets -p udp --dport 25565 -j ACCEPT
+$IPTABLES -A udp_packets -p udp --dport 25566 -j ACCEPT
 # drop everything else with logging
-$IPTABLES -A udp_packets -p udp -j LOG --log-level debug \
+$IPTABLES -A udp_packets -p udp ! -i $INET_IFACE -j LOG --log-level debug \
   --log-prefix "IPT UDP pkt died: "
 $IPTABLES -A udp_packets -p udp -j DROP
 
@@ -326,9 +358,9 @@ $IPTABLES -A icmp_packets -p icmp -j DROP
 #
 # Always forward packets from the external IP.
 #
-$IPTABLES -A FORWARD -s $INET_IP -j ACCEPT
 $INETA1 && $IPTABLES -A FORWARD -s $INETA1_IP -j ACCEPT
-$INET2 && $IPTABLES -A FORWARD -s $INETA1_IP -j ACCEPT
+$INETA2 && $IPTABLES -A FORWARD -s $INETA2_IP -j ACCEPT
+$INET2 && $IPTABLES -A FORWARD -s $INET2_IP -j ACCEPT
 
 #
 # Always forward packets from trusted interfaces.
@@ -339,169 +371,89 @@ do
 done
 
 #
-# Our guest WAP network setup is WEP, so "semi-trusted"; do not
-# allow it to interact with our trusted networks.
-#
-
-#
-# The WAP interface is only partly trusted, since
-# it is WEP.
-#
-if $WAP
-then
-    $IPTABLES -A FORWARD -i $WAP_IFACE -d $INET_IP -j ACCEPT
-    $INET2 && $IPTABLES -A FORWARD -i $WAP_IFACE -d $INET2_IP -j ACCEPT
-    $IPTABLES -A FORWARD -i $WAP_IFACE -d $MCAST_RANGE -j ACCEPT
-    $IPTABLES -A FORWARD -i $WAP_IFACE -j badguest
-fi
-
-#
 # Find TCP packets we want to forward.
 #
 $IPTABLES -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 
 $IPTABLES -A FORWARD -p tcp -j tcp_packets
 $IPTABLES -A FORWARD -p udp -j udp_packets
 $IPTABLES -A FORWARD -p icmp -j icmp_packets
-$IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
-  --log-level debug --log-prefix "IPT FORWARD packet died: "
+#$IPTABLES -A FORWARD -m conntrack --ctstate limit --limit 3/minute --limit-burst 3 -j LOG \
+#  --log-level debug --log-prefix "IPT FORWARD packet died: "
 
 #
-# PREROUTING chain.
-#
-# BitWise IM
-#$IPTABLES -t nat -A PREROUTING -p udp --dport 4173 -i $INET_IFACE \
-#  -j DNAT --to 192.168.1.7
-#$IPTABLES -t nat -A PREROUTING -p tcp --dport 4173 -i $INET_IFACE \
-#  -j DNAT --to 192.168.1.7
-# World of Warcraft
-#$IPTABLES -t nat -A PREROUTING -p tcp --dport 3724 -i $INET_IFACE \
-#  -j DNAT --to 192.168.5.19
-# Well-known Bob's Minecraft Server tunnel
-if [ -f /etc/minecraft-server-ip ]
-then
-    $IPTABLES -t nat -A PREROUTING -p tcp \
-       -d $INET_IP --dport 25565 \
-       -i $INET_IFACE -j DNAT --to `cat /etc/minecraft-server-ip`
-    $IPTABLES -t nat -A PREROUTING -p udp \
-       -d $INET_IP --dport 25565 \
-       -i $INET_IFACE -j DNAT --to `cat /etc/minecraft-server-ip`
-fi
-# Ben's Minecraft
-if $INETA1
-then
-    $IPTABLES -t nat -A PREROUTING -p tcp \
-      -d $INETA1_IP --dport 25565 \
-      -i $INET_IFACE -j DNAT --to 192.168.1.27
-    $IPTABLES -t nat -A PREROUTING -p udp \
-      -d $INETA1_IP --dport 25565 \
-      -i $INET_IFACE -j DNAT --to 192.168.1.27
-fi
-# bartfan SSH
-$INETA1 && $IPTABLES -t nat -A PREROUTING -p tcp \
-      -d $INETA1_IP --dport 22 \
-      -i $INET_IFACE -j DNAT --to 192.168.1.7
-
-#
-# Report and drop SSH attack packets.
+# Drop SSH attack packets.
 #
 $IPTABLES -N ssh_reject
-$IPTABLES -A ssh_reject -j LOG \
-  --log-level debug --log-prefix "IPT SSH reject: "
+#$IPTABLES -A ssh_reject -j LOG \
+#  --log-level debug --log-prefix "IPT SSH reject: "
 $IPTABLES -A ssh_reject -j DROP
 
 #
 # INPUT chain
 #
-# Pick off blacklisted hosts.
-# Let's not even talk to these folks
-#$IPTABLES -A INPUT -s 67.60.207.230 -j DROP
-#$IPTABLES -A INPUT -s 58.96.93.246 -j DROP
-#$IPTABLES -A INPUT -s 98.127.56.13 -j DROP
-#$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
-#$IPTABLES -A INPUT -s 208.187.212.152 -j DROP
-#$IPTABLES -A INPUT -s 206.18.148.184 -j DROP
-#$IPTABLES -A INPUT -s 23.23.0.0/16 -j DROP
-# Shut off port 3724 unless handled above. (Why?)
-#$IPTABLES -A INPUT -p tcp --dport 3724 -i $INET_IFACE -j DROP
-# Drop packets intended for the IP alias at this point,
-# since they should have already been DNATted.
-if $INETA1
-then
-#    $IPTABLES -A INPUT -d $INETA1_IP -j LOG \
-#      --log-level debug --log-prefix "IPT missed hole: "
-    $IPTABLES -A INPUT -d $INETA1_IP -j DROP
-fi
+
 # If the packet comes from a trusted or partially-trusted
 # network, accept it blindly.
 for i in $TRUSTED_IFACE
 do
     $IPTABLES -A INPUT -i $i -j ACCEPT
 done
-$WAP && $IPTABLES -A INPUT -i $WAP_IFACE -j ACCEPT
+
+# Drop external packets intended for the IP alias at this point,
+# since they should have already been dealt with.
+if $INETA1
+then
+    $IPTABLES -A INPUT -d $INETA1_IP ! -i $INET_IFACE -j LOG \
+      --log-level debug --log-prefix "IPT missed hole: "
+    $IPTABLES -A INPUT -d $INETA1_IP -j DROP
+fi
+if $INETA2
+then
+    $IPTABLES -A INPUT -d $INETA2_IP ! -i $INET_IFACE -j LOG \
+      --log-level debug --log-prefix "IPT missed hole: "
+    $IPTABLES -A INPUT -d $INETA2_IP -j DROP
+fi
+if $INET2
+then
+    $IPTABLES -A INPUT -d $INET2_IP ! -i $INET_IFACE -j LOG \
+      --log-level debug --log-prefix "IPT missed hole: "
+    $IPTABLES -A INPUT -d $INET2_IP -j DROP
+fi
 $IPTABLES -A INPUT -i $LO_IFACE -j ACCEPT
 # Use iptables to stop ssh password guessing attacks
 # Thanks http://www.linuxmanagers.org/pipermail/linuxmanagers/2005-April/001752.html
 $IPTABLES -A INPUT -i $INET_IFACE \
-  -p tcp --dport 22 --syn -m recent --name sshattack \
+  -p tcp --dport 22 --syn -m conntrack --ctstate recent --name sshattack \
   --set
 $IPTABLES -A INPUT -i $INET_IFACE \
-  -p tcp --dport 22 --syn -m recent --name sshattack \
-  --rcheck --seconds 600 --hitcount 15 -j ssh_reject
-if $INET2
-then
-  $IPTABLES -A INPUT -i $INET2_IFACE \
-    -p tcp --dport 22 --syn -m recent --name sshattack \
-    --set
-  $IPTABLES -A INPUT -i $INET2_IFACE \
-    -p tcp --dport 22 --syn -m recent --name sshattack \
-    --rcheck --seconds 600 --hitcount 15 -j ssh_reject
-fi
+  -p tcp --dport 22 --syn -m conntrack --ctstate recent --name sshattack \
+  --rcheck --seconds 600 --hitcount 20 -j ssh_reject
 # Do some checks for obviously spoofed IP's, and accept
 # established connections.
-$IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
-  -m limit --limit 3/minute --limit-burst 3 -j LOG \
-  --log-level debug --log-prefix "IPT spoofed packet died: "
+#$IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE \
+#  -m conntrack --ctstate limit --limit 3/minute --limit-burst 3 -j LOG \
+#  --log-level debug --log-prefix "IPT spoofed packet died: "
 $IPTABLES -A INPUT -i $INET_IFACE -s $INT_RANGE -j DROP
 $IPTABLES -A INPUT -d $INET_IP \
   -m state --state ESTABLISHED,RELATED -j ACCEPT
-if $INET2
-then
-  $IPTABLES -A INPUT -i $INET2_IFACE -s $INT_RANGE \
-    -m limit --limit 3/minute --limit-burst 3 -j LOG \
-    --log-level debug --log-prefix "IPT spoofed packet died: "
-  $IPTABLES -A INPUT -i $INET2_IFACE -s $INT_RANGE -j DROP
-  $IPTABLES -A INPUT -d $INET2_IP \
-    -m state --state ESTABLISHED,RELATED -j ACCEPT
-fi
 # Rules for incoming packets from the internet.
 $IPTABLES -A INPUT -i $INET_IFACE -d $INET_IP -j ACCEPT
 $IPTABLES -A INPUT -p icmp -i $INET_IFACE -j icmp_packets
 $IPTABLES -A INPUT -p tcp -i $INET_IFACE -j tcp_checks
 $IPTABLES -A INPUT -i $INET_IFACE -j ACCEPT
-if $INET2
-then
-  $IPTABLES -A INPUT -i $INET2_IFACE -d $INET2_IP -j ACCEPT
-  $IPTABLES -A INPUT -p icmp -i $INET2_IFACE -j icmp_packets
-  $IPTABLES -A INPUT -p tcp -i $INET2_IFACE -j tcp_checks
-  $IPTABLES -A INPUT -i $INET2_IFACE -j ACCEPT
-fi
 
 # If we make it this far down the INPUT chain,
 # log and take the default DROP.
-$IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
-  --log-level debug --log-prefix "IPT INPUT packet died: "
+$IPTABLES -A INPUT -m conntrack --ctstate limit --limit 1/minute --limit-burst 3 \
+  -j LOG --log-level debug --log-prefix "IPT INPUT packet died: "
+$IPTABLES -A INPUT -j DROP
 
 #
 # Drop IPP packets out the external interfaces
 # because CUPS sucks and cannot.
 # http://cups.org/str.php?L3020+P0+S-2+C0+I0+E0+M1000+Q
 #
-$IPTABLES -A OUTPUT -p udp --dport 631 -o $INET_IFACE -j DROP
-$INET2 && $IPTABLES -A OUTPUT -p udp --dport 631 -o $INET2_IFACE -j DROP
-
-#
-# Do not even send these folks anything
-#
-#$IPTABLES -A OUTPUT -d 206.18.148.184 -j DROP
+$IPTABLES -A OUTPUT -p udp --sport 631 -o $INET_IFACE -j DROP
+$IPTABLES -A OUTPUT -p tcp --sport 631 -o $INET_IFACE -j DROP
 
 $TC start

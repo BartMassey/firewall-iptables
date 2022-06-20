@@ -24,7 +24,7 @@ then
     /sbin/ifconfig "$2" >$TMP 2>/dev/null
     case $? in
     0)
-        IP="`grep 'inet addr' <$TMP | awk '{print $2}' | sed -e 's/.*://'`"
+        IP="`grep inet <$TMP | awk '{print $2}' | sed -e 's/.*://'`"
         case "$IP" in
         [0-9]*.[0-9]*.[0-9]*.[0-9]*)
             echo "$1=true; export $1"

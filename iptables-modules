@@ -11,7 +11,6 @@ ipt_MASQUERADE
 ipt_REDIRECT
 ipt_REJECT
 ipt_TCPMSS
-ipt_ULOG
 ipt_ah
 ipt_conntrack
 ipt_dscp
